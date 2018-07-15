@@ -10,6 +10,18 @@ Resolves: https://gitlab.com/mintel/satoshi/infrastructure/terragrunt-satoshi-cl
 
 We can opensource this if it's useful
 
+## Usage
+
+If run as a binary outside of cluster, should use $HOME/.kube/config, else uses
+in-cluster configuration.
+
+```
+make build
+./bin/app serve
+```
+
+Monitor log output by applying ingresses to your cluster.
+
 # Design 
 
 The simplest solution is:
