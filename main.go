@@ -32,30 +32,107 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 
-    _"github.com/coreos/dex/api"
-	_"google.golang.org/grpc"
+    "github.com/coreos/dex/api"
+	"google.golang.org/grpc"
 	_"google.golang.org/grpc/credentials"
 )
 
 type DexK8sDynamicClientsApp struct {
 	logger logrus.FieldLogger
+    dexClient api.DexClient
 }
 
 /*
-func checkIngressHasAnnotions(obj interface{}) {}
 func extractAnnotationDetails(obj interface{}) {}
 
 https://github.com/coreos/dex/blob/master/examples/grpc-client/client.go
 func addDexClient() {}
 func removeDexClient() {}
-
-func newDexClient() {}
 */
 
+func newDexClient(hostAndPort string) (api.DexClient, error) {
+    //func newDexClient(hostAndPort, caPath, clientCrt, clientKey string) (api.DexClient, error) {
+	/*cPool := x509.NewCertPool()
+	caCert, err := ioutil.ReadFile(caPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid CA crt file: %s", caPath)
+	}
+	if cPool.AppendCertsFromPEM(caCert) != true {
+		return nil, fmt.Errorf("failed to parse CA crt")
+	}
+
+	clientCert, err := tls.LoadX509KeyPair(clientCrt, clientKey)
+	if err != nil {
+		return nil, fmt.Errorf("invalid client crt file: %s", caPath)
+	}
+
+	clientTLSConfig := &tls.Config{
+		RootCAs:      cPool,
+		Certificates: []tls.Certificate{clientCert},
+	}
+	creds := credentials.NewTLS(clientTLSConfig)
+	conn, err := grpc.Dial(hostAndPort, grpc.WithTransportCredentials(creds))
+    */
+	conn, err := grpc.Dial(hostAndPort)
+	if err != nil {
+		return nil, fmt.Errorf("dail: %v", err)
+	}
+	return api.NewDexClient(conn), nil
+}
+
+const (
+	// IngressKey picks a specific "class" for the Ingress.
+	IngressAnnotationStaticClient = "mintel.com/dex-static-client"
+)
+
+
+func checkIngressHasAnnotions(ing *v1beta1.Ingress, c *DexK8sDynamicClientsApp) (bool) {
+	if ing.GetAnnotations() == nil {
+		return false
+	}
+
+    _, ok := ing.GetAnnotations()[IngressAnnotationStaticClient]
+    if !ok {
+	    c.logger.Infof("Annotation not found in ingress %s", ing)
+        return false
+    }
+    return true
+}
+
+// GetDomains returns the list of hosts associated with rules 
+func getDomains(ingress *v1beta1.Ingress) []string {
+	hosts := []string{}
+	for _, rule := range ingress.Spec.Rules {
+	    hosts = append(hosts, rule.Host)
+	}
+	return hosts
+}
+
+func addIngressAsDexStaticClient(ing *v1beta1.Ingress, c *DexK8sDynamicClientsApp) {
+    hosts := getDomains(ing)
+    for _, host := range hosts {
+        c.logger.Infof("Got Host %s", host)
+
+        // Add host as static client to Dex
+        addClientRedirectUriReq := &api.AddClientRedirectUriReq{
+			Id: "dex-k8s-dynamic",
+			RedirectUri: host,
+		}
+
+        _, err := c.dexClient.ClientAddRedirectUri(addClientRedirectUriReq)
+		if err == nil {
+			c.logger.Infof("redirect URI successfully added.\n")
+		}
+
+    }
+}
+
+
 // Return a new app.
-func NewDexK8sDynamicClientsApp(logger logrus.FieldLogger) *DexK8sDynamicClientsApp {
+func NewDexK8sDynamicClientsApp(logger logrus.FieldLogger, dexClient api.DexClient) *DexK8sDynamicClientsApp {
 	return &DexK8sDynamicClientsApp{
 		logger: logger,
+        dexClient: dexClient,
 	}
 }
 
@@ -63,9 +140,15 @@ func NewDexK8sDynamicClientsApp(logger logrus.FieldLogger) *DexK8sDynamicClients
 func (c *DexK8sDynamicClientsApp) OnAdd(obj interface{}) {
 	ing, ok := obj.(*v1beta1.Ingress)
 	if !ok {
-		c.logger.Errorf("OnAdd type %T: %#v", ing, ing)
+		c.logger.Errorf("OnAdd endpoints received invalid obj; %T: %#v", ing, ing)
+        return
 	}
-	c.logger.Infof("OnDelete unexpected type %T: %#v", obj, obj)
+
+	c.logger.Infof("OnAdd got type %T: %#v", obj, obj)
+
+    if checkIngressHasAnnotions(ing, c) {
+        addIngressAsDexStaticClient(ing, c)
+    }
 }
 
 func (c *DexK8sDynamicClientsApp) OnUpdate(oldObj, newObj interface{}) {
@@ -76,19 +159,19 @@ func (c *DexK8sDynamicClientsApp) OnUpdate(oldObj, newObj interface{}) {
 			c.logger.Errorf("OnUpdate endpoints %#v received invalid oldObj %T; %#v", newObj, oldObj, oldObj)
 			return
 		}
-		c.logger.Infof("OnDelete got type %T: %#v", newObj, newObj)
+		c.logger.Infof("OnUpdate got type %T: %#v", newObj, newObj)
 	default:
 		c.logger.Errorf("OnUpdate unexpected type %T: %#v", newObj, newObj)
 	}
 }
 
 func (c *DexK8sDynamicClientsApp) OnDelete(obj interface{}) {
-	switch obj := obj.(type) {
-	case *v1beta1.Ingress:
-		c.logger.Infof("OnDeleteunexpected type %T: %#v", obj, obj)
-	default:
-		c.logger.Errorf("OnDelete unexpected type %T: %#v", obj, obj)
+	ing, ok := obj.(*v1beta1.Ingress)
+	if !ok {
+		c.logger.Errorf("OnDelete endpoints received invalid obj; %T: %#v", ing, ing)
+        return
 	}
+	c.logger.Infof("OnDelete got type %T: %#v", obj, obj)
 }
 
 func init() {
@@ -117,7 +200,12 @@ func main() {
 		client := newClient(*kubeconfig, *inCluster)
 		logger := logrus.New().WithField("context", "app")
 
-		c := NewDexK8sDynamicClientsApp(logger)
+        dexClient, err := newDexClient("127.0.0.1:5557")
+        if err != nil {
+            logger.Infof("Darn cannot get dex %s", err)
+        }
+
+		c := NewDexK8sDynamicClientsApp(logger, dexClient)
 		w := watchIngress(client, c)
 		w.Run(nil)
 	}
