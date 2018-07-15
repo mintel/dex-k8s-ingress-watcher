@@ -11,6 +11,7 @@ build: install-deps
 
 clean:
 	rm -rf $(OUT_BIN)
+	rm -rf vendor
 
 .PHONY: run
 run: build

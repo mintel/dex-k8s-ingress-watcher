@@ -1,96 +1,146 @@
+//
+// An application which watches for Ingresses and configures Dex clients via 
+// gRPC dynamically, based on Ingress annotations.
+//
+// work-in-progress
+//
 package main
 
 import (
+	"flag"
+	"fmt"
+	kingpin "gopkg.in/alecthomas/kingpin.v2"
 	"os"
 	"path/filepath"
 	"time"
 
-	v1beta1 "k8s.io/api/extensions/v1beta1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/api/core/v1"
+	"k8s.io/api/extensions/v1beta1"
+	"k8s.io/apimachinery/pkg/fields"
+
+	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 
-	"github.com/spotahome/kooper/log"
-	"github.com/spotahome/kooper/operator/controller"
-	"github.com/spotahome/kooper/operator/handler"
-	"github.com/spotahome/kooper/operator/retrieve"
+    _"github.com/coreos/dex/api"
+	_"google.golang.org/grpc"
+	_"google.golang.org/grpc/credentials"
 )
+
+type DexK8sDynamicClientsApp struct {
+	logger logrus.FieldLogger
+}
+
+/*
+func checkIngressHasAnnotions(obj interface{}) {}
+func extractAnnotationDetails(obj interface{}) {}
+
+https://github.com/coreos/dex/blob/master/examples/grpc-client/client.go
+func addDexClient() {}
+func removeDexClient() {}
+
+func newDexClient() {}
+*/
+
+func NewDexK8sDynamicClientsApp(logger logrus.FieldLogger) *DexK8sDynamicClientsApp {
+	return &DexK8sDynamicClientsApp{
+		logger: logger,
+	}
+}
+
+func (c *DexK8sDynamicClientsApp) OnAdd(obj interface{}) {
+	ing, ok := obj.(*v1beta1.Ingress)
+	if !ok {
+		c.logger.Errorf("OnAdd type %T: %#v", ing, ing)
+	}
+	c.logger.Infof("OnDelete unexpected type %T: %#v", obj, obj)
+}
+
+func (c *DexK8sDynamicClientsApp) OnUpdate(oldObj, newObj interface{}) {
+	switch newObj := newObj.(type) {
+	case *v1beta1.Ingress:
+		oldObj, ok := oldObj.(*v1beta1.Ingress)
+		if !ok {
+			c.logger.Errorf("OnUpdate endpoints %#v received invalid oldObj %T; %#v", newObj, oldObj, oldObj)
+			return
+		}
+		c.logger.Infof("OnDelete got type %T: %#v", newObj, newObj)
+	default:
+		c.logger.Errorf("OnUpdate unexpected type %T: %#v", newObj, newObj)
+	}
+}
+
+func (c *DexK8sDynamicClientsApp) OnDelete(obj interface{}) {
+	switch obj := obj.(type) {
+	case *v1beta1.Ingress:
+		c.logger.Infof("OnDeleteunexpected type %T: %#v", obj, obj)
+	default:
+		c.logger.Errorf("OnDelete unexpected type %T: %#v", obj, obj)
+	}
+}
+
+func init() {
+	flag.Parse()
+}
 
 func main() {
 	// Initialize logger.
-	log := &log.Std{}
+	log := logrus.StandardLogger()
 
-	// Get k8s client.
-	k8scfg, err := rest.InClusterConfig()
-	if err != nil {
-		// No in cluster? letr's try locally
-		kubehome := filepath.Join(homedir.HomeDir(), ".kube", "config")
-		k8scfg, err = clientcmd.BuildConfigFromFlags("", kubehome)
-		if err != nil {
-			log.Errorf("error loading kubernetes configuration: %s", err)
-			os.Exit(1)
-		}
+	app := kingpin.New("app", "Create Dex client based of Ingress")
+
+	serve := app.Command("serve", "Run it")
+	inCluster := serve.Flag("incluster", "use in cluster configuration.").Bool()
+	kubeconfig := serve.Flag("kubeconfig", "path to kubeconfig (if not in running inside a cluster)").Default(filepath.Join(os.Getenv("HOME"), ".kube", "config")).String()
+
+	args := os.Args[1:]
+	switch kingpin.MustParse(app.Parse(args)) {
+	//default:
+	//	app.Usage(args)
+	//	os.Exit(2)
+	//case serve.FullCommand():
+	default:
+		log.Infof("args: %v", args)
+
+		client := newClient(*kubeconfig, *inCluster)
+		logger := logrus.New().WithField("context", "app")
+
+		c := NewDexK8sDynamicClientsApp(logger)
+		w := watchIngress(client, c)
+		w.Run(nil)
 	}
-	k8scli, err := kubernetes.NewForConfig(k8scfg)
+}
+
+func newClient(kubeconfig string, inCluster bool) *kubernetes.Clientset {
+	var err error
+	var config *rest.Config
+	if kubeconfig != "" && !inCluster {
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		exitOnError(err)
+	} else {
+		config, err = rest.InClusterConfig()
+		exitOnError(err)
+	}
+
+	client, err := kubernetes.NewForConfig(config)
+	exitOnError(err)
+	return client
+}
+
+func watchIngress(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler) cache.SharedInformer {
+	lw := cache.NewListWatchFromClient(client.ExtensionsV1beta1().RESTClient(), "ingresses", v1.NamespaceAll, fields.Everything())
+	sw := cache.NewSharedInformer(lw, new(v1beta1.Ingress), 30*time.Minute)
+	for _, r := range rs {
+		sw.AddEventHandler(r)
+	}
+	return sw
+}
+
+func exitOnError(err error) {
 	if err != nil {
-		log.Errorf("error creating kubernetes client: %s", err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-
-	// Create our retriever so the controller knows how to get/listen for ingress events.
-	retr := &retrieve.Resource{
-		Object: &v1beta1.Ingress{},
-		ListerWatcher: &cache.ListWatch{
-			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				return k8scli.ExtensionsV1beta1().Ingresses("").List(options)
-			},
-			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				return k8scli.ExtensionsV1beta1().Ingresses("").Watch(options)
-			},
-		},
-	}
-
-	// Our domain logic that will print every add/sync/update and delete event we .
-	// Our domain logic that will print every add/sync/update and delete event we .
-//DeleteFunc: func(obj interface{}) {
-//			delIng := obj.(*extensions.Ingress)
-//			if !isGCEIngress(delIng) && !isGCEMultiClusterIngress(delIng) {
-//				glog.V(4).Infof("Ignoring delete for ingress %v based on annotation %v", delIng.Name, annotations.IngressClassKey)
-//				return
-//			}
-	hand := &handler.HandlerFunc{
-		AddFunc: func(obj runtime.Object) error {
-            ingress := obj.(*v1beta1.Ingress)
-
-            dex_redirect_uri, ok1 := ingress.GetAnnotations()["mintel.com/dex-redirect-uri"]
-            dex_service_name, ok2 := ingress.GetAnnotations()["mintel.com/dex-service-name"]
-            if ok1 && ok2 {
-                log.Infof("Added Ingress '%s' - %s/%s", ingress, dex_redirect_uri, dex_service_name)
-            }
-
-			return nil
-		},
-		DeleteFunc: func(obj interface{}) {
-			delIng := obj.(*v1beta1.Ingress)
-			log.Infof("Ingress deleted: %s", delIng.Name)
-		},
-	}
-
-
-	// Create the controller that will refresh every 30 seconds.
-	ctrl := controller.NewSequential(30*time.Second, hand, retr, nil, log)
-
-	// Start our controller.
-	stopC := make(chan struct{})
-	if err := ctrl.Run(stopC); err != nil {
-		log.Errorf("error running controller: %s", err)
-		os.Exit(1)
-	}
-	os.Exit(0)
 }
