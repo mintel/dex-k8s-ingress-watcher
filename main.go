@@ -4,6 +4,14 @@
 //
 // work-in-progress
 //
+// todo:
+//  module structure
+//  tests
+//  dex-client impl.
+//  certs for dex
+//  annotation parsing
+//  in-cluster yaml and image-building
+//
 package main
 
 import (
@@ -44,12 +52,14 @@ func removeDexClient() {}
 func newDexClient() {}
 */
 
+// Return a new app.
 func NewDexK8sDynamicClientsApp(logger logrus.FieldLogger) *DexK8sDynamicClientsApp {
 	return &DexK8sDynamicClientsApp{
 		logger: logger,
 	}
 }
 
+// Ingress event-handlers
 func (c *DexK8sDynamicClientsApp) OnAdd(obj interface{}) {
 	ing, ok := obj.(*v1beta1.Ingress)
 	if !ok {
@@ -113,6 +123,7 @@ func main() {
 	}
 }
 
+// Return a new k8s client based on local or in-cluster configuration
 func newClient(kubeconfig string, inCluster bool) *kubernetes.Clientset {
 	var err error
 	var config *rest.Config
@@ -129,6 +140,7 @@ func newClient(kubeconfig string, inCluster bool) *kubernetes.Clientset {
 	return client
 }
 
+// Watch all ingresses in all namespaces and add event-handlers
 func watchIngress(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler) cache.SharedInformer {
 	lw := cache.NewListWatchFromClient(client.ExtensionsV1beta1().RESTClient(), "ingresses", v1.NamespaceAll, fields.Everything())
 	sw := cache.NewSharedInformer(lw, new(v1beta1.Ingress), 30*time.Minute)
@@ -138,6 +150,7 @@ func watchIngress(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler
 	return sw
 }
 
+// Helper to print errors and exit
 func exitOnError(err error) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
