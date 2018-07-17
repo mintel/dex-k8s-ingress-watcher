@@ -1,33 +1,17 @@
 //
 // An application which watches for Ingresses and configures Dex clients via
 // gRPC dynamically, based on Ingress annotations.
-//
-// This is a helper tool to get around the fact that Dex does not support
-// wildcards in redirect-uris: https://github.com/coreos/dex/issues/1261
-//
-//
-//
-// Example ingress in kubernetes:
-//
-// apiVersion: extensions/v1beta1
-// kind: Ingress
-// metadata:
-//   annotations:
-// 	   mintel.com/dex-static-client-id: my-app
-//     mintel.com/dex-static-client-name: My Application
-// 	   mintel.com/dex-redirect-uri: https://my-app.svc.example.com/oauth/callback
-//
-//
 package main
 
 import (
 	"context"
 	"flag"
 	"fmt"
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
 	"os"
 	"path/filepath"
 	"time"
+
+	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
 	"k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
@@ -91,9 +75,9 @@ func newDexClient(hostAndPort string) (api.DexClient, error) {
 const (
 	// Define annotations we check for in the Ingress annotations
 	// metadata
-	IngressAnnotationDexStaticClientId          = "mintel.com/dex-static-client-id"
-	IngressAnnotationDexStaticClientName        = "mintel.com/dex-static-client-name"
-	IngressAnnotationDexStaticClientRedirectURI = "mintel.com/dex-redirect-uri"
+	IngressAnnotationDexStaticClientId          = "mintel.com/dex-k8s-ingress-watcher-static-client-id"
+	IngressAnnotationDexStaticClientName        = "mintel.com/dex-k8s-ingress-watcher-client-name"
+	IngressAnnotationDexStaticClientRedirectURI = "mintel.com/dex-k8s-ingress-watcher-redirect-uri"
 )
 
 const (
