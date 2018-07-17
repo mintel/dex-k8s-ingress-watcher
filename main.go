@@ -1,9 +1,26 @@
 //
-// An application which watches for Ingresses and configures Dex clients via 
+// An application which watches for Ingresses and configures Dex clients via
 // gRPC dynamically, based on Ingress annotations.
 //
 // work-in-progress
 //
+// issues:
+//
+// dex does not support modifying redirecturis, but does support creating
+// static clients: https://github.com/coreos/dex/issues/1261
+
+//
+//
+//
+//
+//
+// - id: django-echoheaders
+// redirectURIs:
+// - 'https://django-echoheaders.svc.dev1.k8s-dev.mintel.com/oauth/callback'
+// name: 'Example App'
+// secret: 'a-secret'
+//
+
 // todo:
 //  module structure
 //  tests
@@ -11,10 +28,11 @@
 //  certs for dex
 //  annotation parsing
 //  in-cluster yaml and image-building
-//
+// check connection to grpc client
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
@@ -28,18 +46,19 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 
-    "github.com/coreos/dex/api"
+	"github.com/coreos/dex/api"
 	"google.golang.org/grpc"
-	_"google.golang.org/grpc/credentials"
+	_ "google.golang.org/grpc/credentials"
 )
 
 type DexK8sDynamicClientsApp struct {
-	logger logrus.FieldLogger
-    dexClient api.DexClient
+	logger    logrus.FieldLogger
+	dexClient api.DexClient
 }
 
 /*
@@ -51,7 +70,7 @@ func removeDexClient() {}
 */
 
 func newDexClient(hostAndPort string) (api.DexClient, error) {
-    //func newDexClient(hostAndPort, caPath, clientCrt, clientKey string) (api.DexClient, error) {
+	//func newDexClient(hostAndPort, caPath, clientCrt, clientKey string) (api.DexClient, error) {
 	/*cPool := x509.NewCertPool()
 	caCert, err := ioutil.ReadFile(caPath)
 	if err != nil {
@@ -72,106 +91,142 @@ func newDexClient(hostAndPort string) (api.DexClient, error) {
 	}
 	creds := credentials.NewTLS(clientTLSConfig)
 	conn, err := grpc.Dial(hostAndPort, grpc.WithTransportCredentials(creds))
-    */
-	conn, err := grpc.Dial(hostAndPort)
+	*/
+	//conn, err := grpc.Dial(hostAndPort)
+	conn, err := grpc.Dial(hostAndPort, grpc.WithInsecure())
 	if err != nil {
-		return nil, fmt.Errorf("dail: %v", err)
+		return nil, fmt.Errorf("dex dial: %v", err)
 	}
 	return api.NewDexClient(conn), nil
 }
 
 const (
 	// IngressKey picks a specific "class" for the Ingress.
-	IngressAnnotationStaticClient = "mintel.com/dex-static-client"
+	IngressAnnotationDexStaticClientId          = "mintel.com/dex-static-client-id"
+	IngressAnnotationDexStaticClientName        = "mintel.com/dex-static-client-name"
+	IngressAnnotationDexStaticClientRedirectURI = "mintel.com/dex-redirect-uri"
 )
 
+const (
+	DexStaticClientSecret = "a-secret"
+)
 
-func checkIngressHasAnnotions(ing *v1beta1.Ingress, c *DexK8sDynamicClientsApp) (bool) {
-	if ing.GetAnnotations() == nil {
-		return false
+func (c *DexK8sDynamicClientsApp) addDexStaticClient(
+	ing *v1beta1.Ingress,
+	static_client_id string,
+	static_client_name string,
+	static_client_redirect_uri string) {
+
+	c.logger.Infof("Registering Ingress '%s'\n\tClient ID: %s\n\tClient Name: %s\n\tRedirectURI: %s",
+		ing.Name,
+		static_client_id,
+		static_client_name,
+		static_client_redirect_uri)
+
+	redirect_uris := []string{static_client_redirect_uri}
+
+	req := &api.CreateClientReq{
+		Client: &api.Client{
+			Id:           static_client_id,
+			Name:         static_client_name,
+			Secret:       DexStaticClientSecret,
+			RedirectUris: redirect_uris,
+		},
 	}
 
-    _, ok := ing.GetAnnotations()[IngressAnnotationStaticClient]
-    if !ok {
-	    c.logger.Infof("Annotation not found in ingress %s", ing)
-        return false
-    }
-    return true
-}
-
-// GetDomains returns the list of hosts associated with rules 
-func getDomains(ingress *v1beta1.Ingress) []string {
-	hosts := []string{}
-	for _, rule := range ingress.Spec.Rules {
-	    hosts = append(hosts, rule.Host)
+	if resp, err := c.dexClient.CreateClient(context.TODO(), req); err != nil {
+		c.logger.Errorf("Dex gRPC: Failed creating oauth2 client for Ingress '%s': %v", ing.Name, err)
+	} else {		
+		if (resp.AlreadyExists) {
+			c.logger.Errorf("Dex gPRC: client already exists for Ingress '%s'", ing.Name)			
+		} else {
+			c.logger.Infof("Dex gRPC: Successfully created client for Ingress '%s'", ing.Name)			
+		}
 	}
-	return hosts
 }
 
-func addIngressAsDexStaticClient(ing *v1beta1.Ingress, c *DexK8sDynamicClientsApp) {
-    hosts := getDomains(ing)
-    for _, host := range hosts {
-        c.logger.Infof("Got Host %s", host)
+func (c *DexK8sDynamicClientsApp) deleteDexStaticClient(
+	ing *v1beta1.Ingress,
+	static_client_id string) {
 
-        // Add host as static client to Dex
-        addClientRedirectUriReq := &api.AddClientRedirectUriReq{
-			Id: "dex-k8s-dynamic",
-			RedirectUri: host,
+	c.logger.Infof("Deleting Ingress '%s'\n\tClient ID: %s", ing.Name, static_client_id)
+
+	req := &api.DeleteClientReq{
+		Id: static_client_id,		
+	}
+
+	if resp, err := c.dexClient.DeleteClient(context.TODO(), req); err != nil {
+		c.logger.Errorf("Dex gRPC: Failed deleting oauth2 client for Ingress '%s': %v", ing.Name, err)
+	} else {		
+		if (resp.NotFound) {
+			c.logger.Errorf("Dex gPRC: client '%s' could not be deleted for Ingress '%s' - not found '%s'", static_client_id, ing.Name)			
+		} else {
+			c.logger.Infof("Dex gRPC: Successfully deleted client for Ingress '%s'", ing.Name)			
 		}
-
-        _, err := c.dexClient.ClientAddRedirectUri(addClientRedirectUriReq)
-		if err == nil {
-			c.logger.Infof("redirect URI successfully added.\n")
-		}
-
-    }
+	}
 }
 
 
 // Return a new app.
 func NewDexK8sDynamicClientsApp(logger logrus.FieldLogger, dexClient api.DexClient) *DexK8sDynamicClientsApp {
 	return &DexK8sDynamicClientsApp{
-		logger: logger,
-        dexClient: dexClient,
+		logger:    logger,
+		dexClient: dexClient,
 	}
 }
 
 // Ingress event-handlers
 func (c *DexK8sDynamicClientsApp) OnAdd(obj interface{}) {
+
 	ing, ok := obj.(*v1beta1.Ingress)
 	if !ok {
-		c.logger.Errorf("OnAdd endpoints received invalid obj; %T: %#v", ing, ing)
-        return
+		return
 	}
 
-	c.logger.Infof("OnAdd got type %T: %#v", obj, obj)
+	c.logger.Debugf("Checking Ingress creation '%s'...", ing.Name)
 
-    if checkIngressHasAnnotions(ing, c) {
-        addIngressAsDexStaticClient(ing, c)
-    }
-}
-
-func (c *DexK8sDynamicClientsApp) OnUpdate(oldObj, newObj interface{}) {
-	switch newObj := newObj.(type) {
-	case *v1beta1.Ingress:
-		oldObj, ok := oldObj.(*v1beta1.Ingress)
-		if !ok {
-			c.logger.Errorf("OnUpdate endpoints %#v received invalid oldObj %T; %#v", newObj, oldObj, oldObj)
-			return
-		}
-		c.logger.Infof("OnUpdate got type %T: %#v", newObj, newObj)
-	default:
-		c.logger.Errorf("OnUpdate unexpected type %T: %#v", newObj, newObj)
+	static_client_id, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientId]
+	if !ok {
+		c.logger.Debugf("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientId)
+		return
 	}
+
+	static_client_name, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientName]
+
+	if !ok {
+		c.logger.Debugf("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientName)
+		return
+	}
+
+	static_client_redirect_uri, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientRedirectURI]
+
+	if !ok {
+		c.logger.Debugf("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientRedirectURI)
+		return
+	}
+
+	c.addDexStaticClient(ing, static_client_id, static_client_name, static_client_redirect_uri)
 }
+
+func (c *DexK8sDynamicClientsApp) OnUpdate(oldObj, newObj interface{}) {}
+
 
 func (c *DexK8sDynamicClientsApp) OnDelete(obj interface{}) {
+
 	ing, ok := obj.(*v1beta1.Ingress)
 	if !ok {
-		c.logger.Errorf("OnDelete endpoints received invalid obj; %T: %#v", ing, ing)
-        return
+		return
 	}
-	c.logger.Infof("OnDelete got type %T: %#v", obj, obj)
+
+	c.logger.Debugf("Checking Ingress deletion for '%s'...", ing.Name)
+
+	static_client_id, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientId]
+	if !ok {
+		c.logger.Debugf("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientId)
+		return
+	}
+
+	c.deleteDexStaticClient(ing, static_client_id)
 }
 
 func init() {
@@ -187,6 +242,7 @@ func main() {
 	serve := app.Command("serve", "Run it")
 	inCluster := serve.Flag("incluster", "use in cluster configuration.").Bool()
 	kubeconfig := serve.Flag("kubeconfig", "path to kubeconfig (if not in running inside a cluster)").Default(filepath.Join(os.Getenv("HOME"), ".kube", "config")).String()
+	dex_grpc_service := serve.Flag("dex-grpc-service", "dex grpc service").Default("127.0.0.1.5557").String()
 
 	args := os.Args[1:]
 	switch kingpin.MustParse(app.Parse(args)) {
@@ -200,10 +256,10 @@ func main() {
 		client := newClient(*kubeconfig, *inCluster)
 		logger := logrus.New().WithField("context", "app")
 
-        dexClient, err := newDexClient("127.0.0.1:5557")
-        if err != nil {
-            logger.Infof("Darn cannot get dex %s", err)
-        }
+		dexClient, err := newDexClient(*dex_grpc_service)
+		if err != nil {
+			logger.Infof("Cannot contact Dex gRPC service at %s: %s", dex_grpc_service, err)
+		}
 
 		c := NewDexK8sDynamicClientsApp(logger, dexClient)
 		w := watchIngress(client, c)
