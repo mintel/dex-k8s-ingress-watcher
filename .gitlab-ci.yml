@@ -1,0 +1,22 @@
+image: docker:latest
+services:
+- docker:dind
+
+stages:
+- build
+
+variables:
+  RELEASE_IMAGE: $CI_REGISTRY_IMAGE:latest
+
+before_script:
+  - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN registry.gitlab.com
+build:
+  tags: 
+    - mintel
+  stage: build
+  script:
+    - docker build -t $RELEASE_IMAGE .
+    - docker push $RELEASE_IMAGE
+  only:
+    - master
+
