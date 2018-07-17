@@ -1,4 +1,4 @@
-# dex-k8s-dynamic-clients
+# dex-k8s-ingress-watcher
 
 Monitor kubernetes ingresses and modify the `staticClients` list in a dex 
 configuration via gRPC.
@@ -6,47 +6,56 @@ configuration via gRPC.
 This is to get around the issue that Dex does not support wildcards in it's
 redirectURI option.
 
-Resolves: https://gitlab.com/mintel/satoshi/infrastructure/terragrunt-satoshi-cluster-infrastructure/issues/30
 
-We can opensource this if it's useful
+## Building
 
-## Usage
+```
+make build
+```
+
+## Running
 
 If run as a binary outside of cluster, should use $HOME/.kube/config, else uses
 in-cluster configuration.
 
 ```
-make build
-./bin/app serve
+./bin/dex-k8s-ingress-watcher serve --dex-grpc-address localhost:5557                      
 ```
 
-Monitor log output by applying ingresses to your cluster.
+# Ingress Configuration
 
-# Design 
+`dex-k8s-ingress-watcher` monitors for the creation and deletion of Ingress events
+in your kubernetes cluster.
 
-The simplest solution is:
+The event-handlers check for specific annotations, which are used to pass on information
+related to the creation of `staticClient` entries in Dex via gRPC.
 
-- Run in a loop monitoring ingress 
-- Match the annotation 'mintel.com/dex-k8s-dynamic-client: true' 
-- Generate a gRPC call to the dex service to add the client info
+## Annotations
 
-## Future Design
+```
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    mintel.com/dex-k8s-ingress-watcher-client-id: my-app
+    mintel.com/dex-k8s-ingress-watcher-client-name: My Application
+    mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://myapp.example.com/oauth/callback
 
-- Create a controller to watch for events, rather than run in a loop
-    - This could just watch for ingress events (does not need to be specific to dex)
-- Add a small service to receive annotation spec via webhook 
-- Generate a gRPC call to the dex service to add the client info
+```
 
-# Requirements
+Such an annotation would generate in Dex the following `staticClient`
 
-- Needs to capture when ingresses are created, modified or removed
-- Needs to be quick at updating Dex config, but does not have to be instant 
-- Needs to allow a fresh deployment of Dex and must converge on a config that has the latest cluster state
+```
+staticClients:
+- id: my-app
+  name: My Application
+  redirectURIs:
+  - 'https://myapp.example.com/oauth/callback'
+  
+```
 
-# Initial todo
+# Issues
 
-- Confirm that gRPC is actually dynamic 
-
-# Questions
-
-- Does dex service endpoint need to be configured as part of the annotation (probably)
+- Secret is hard-coded. Do we even need it?
+- Not handling onUpdate event (not sure it's required)
+- No TLS support yet

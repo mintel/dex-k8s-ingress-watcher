@@ -1,6 +1,6 @@
 
 
-OUT_BIN := ./bin/app
+OUT_BIN := ./bin/dex-k8s-ingress-watcher
 
 .PHONY: install-deps
 install-deps: check-deps
