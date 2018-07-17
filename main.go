@@ -17,7 +17,7 @@ import (
 	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/fields"
 
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 	"k8s.io/client-go/rest"
@@ -31,7 +31,6 @@ import (
 
 // App struct
 type DexK8sDynamicClientsApp struct {
-	logger    logrus.FieldLogger
 	dexClient api.DexClient
 }
 
@@ -75,7 +74,7 @@ func newDexClient(hostAndPort string) (api.DexClient, error) {
 const (
 	// Define annotations we check for in the Ingress annotations
 	// metadata
-	IngressAnnotationDexStaticClientId          = "mintel.com/dex-k8s-ingress-watcher-static-client-id"
+	IngressAnnotationDexStaticClientId          = "mintel.com/dex-k8s-ingress-watcher-client-id"
 	IngressAnnotationDexStaticClientName        = "mintel.com/dex-k8s-ingress-watcher-client-name"
 	IngressAnnotationDexStaticClientRedirectURI = "mintel.com/dex-k8s-ingress-watcher-redirect-uri"
 )
@@ -91,7 +90,7 @@ func (c *DexK8sDynamicClientsApp) addDexStaticClient(
 	static_client_name string,
 	static_client_redirect_uri string) {
 
-	c.logger.Infof("Registering Ingress '%s'\n\tClient ID: %s\n\tClient Name: %s\n\tRedirectURI: %s",
+	log.Infof("Registering Ingress '%s'\n\tClient ID: %s\n\tClient Name: %s\n\tRedirectURI: %s",
 		ing.Name,
 		static_client_id,
 		static_client_name,
@@ -109,12 +108,12 @@ func (c *DexK8sDynamicClientsApp) addDexStaticClient(
 	}
 
 	if resp, err := c.dexClient.CreateClient(context.TODO(), req); err != nil {
-		c.logger.Errorf("Dex gRPC: Failed creating oauth2 client for Ingress '%s': %v", ing.Name, err)
+		log.Errorf("Dex gRPC: Failed creating oauth2 client for Ingress '%s': %v", ing.Name, err)
 	} else {
 		if resp.AlreadyExists {
-			c.logger.Errorf("Dex gPRC: client already exists for Ingress '%s'", ing.Name)
+			log.Warnf("Dex gPRC: client already exists for Ingress '%s'", ing.Name)
 		} else {
-			c.logger.Infof("Dex gRPC: Successfully created client for Ingress '%s'", ing.Name)
+			log.Infof("Dex gRPC: Successfully created client for Ingress '%s'", ing.Name)
 		}
 	}
 }
@@ -124,27 +123,26 @@ func (c *DexK8sDynamicClientsApp) deleteDexStaticClient(
 	ing *v1beta1.Ingress,
 	static_client_id string) {
 
-	c.logger.Infof("Deleting Ingress '%s'\n\tClient ID: %s", ing.Name, static_client_id)
+	log.Infof("Deleting Ingress '%s'\n\tClient ID: %s", ing.Name, static_client_id)
 
 	req := &api.DeleteClientReq{
 		Id: static_client_id,
 	}
 
 	if resp, err := c.dexClient.DeleteClient(context.TODO(), req); err != nil {
-		c.logger.Errorf("Dex gRPC: Failed deleting oauth2 client for Ingress '%s': %v", ing.Name, err)
+		log.Errorf("Dex gRPC: Failed deleting oauth2 client for Ingress '%s': %v", ing.Name, err)
 	} else {
 		if resp.NotFound {
-			c.logger.Errorf("Dex gPRC: client '%s' could not be deleted for Ingress '%s' - not found '%s'", static_client_id, ing.Name)
+			log.Errorf("Dex gPRC: client '%s' could not be deleted for Ingress '%s' - not found '%s'", static_client_id, ing.Name)
 		} else {
-			c.logger.Infof("Dex gRPC: Successfully deleted client for Ingress '%s'", ing.Name)
+			log.Infof("Dex gRPC: Successfully deleted client for Ingress '%s'", ing.Name)
 		}
 	}
 }
 
 // Return a new app.
-func NewDexK8sDynamicClientsApp(logger logrus.FieldLogger, dexClient api.DexClient) *DexK8sDynamicClientsApp {
+func NewDexK8sDynamicClientsApp(dexClient api.DexClient) *DexK8sDynamicClientsApp {
 	return &DexK8sDynamicClientsApp{
-		logger:    logger,
 		dexClient: dexClient,
 	}
 }
@@ -154,27 +152,28 @@ func (c *DexK8sDynamicClientsApp) OnAdd(obj interface{}) {
 
 	ing, ok := obj.(*v1beta1.Ingress)
 	if !ok {
+		log.Infof("WTF")
 		return
 	}
 
-	c.logger.Debugf("Checking Ingress creation '%s'...", ing.Name)
+	log.Infof("Checking Ingress creation '%s'...", ing.Name)
 	static_client_id, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientId]
 	if !ok {
-		c.logger.Debugf("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientId)
+		log.Infof("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientId)
 		return
 	}
 
 	static_client_name, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientName]
 
 	if !ok {
-		c.logger.Debugf("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientName)
+		log.Infof("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientName)
 		return
 	}
 
 	static_client_redirect_uri, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientRedirectURI]
 
 	if !ok {
-		c.logger.Debugf("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientRedirectURI)
+		log.Infof("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientRedirectURI)
 		return
 	}
 
@@ -193,11 +192,11 @@ func (c *DexK8sDynamicClientsApp) OnDelete(obj interface{}) {
 		return
 	}
 
-	c.logger.Debugf("Checking Ingress deletion for '%s'...", ing.Name)
+	log.Debugf("Checking Ingress deletion for '%s'...", ing.Name)
 
 	static_client_id, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientId]
 	if !ok {
-		c.logger.Debugf("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientId)
+		log.Debugf("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientId)
 		return
 	}
 
@@ -205,14 +204,12 @@ func (c *DexK8sDynamicClientsApp) OnDelete(obj interface{}) {
 }
 
 func init() {
-	flag.Parse()
+	flag.Parse()	
 }
 
 // Define usage and start the app
 func main() {
-	// Initialize logger.
-	log := logrus.StandardLogger()
-
+	// Initialize logger.	
 	app := kingpin.New("app", "Create Dex client based of Ingress")
 
 	serve := app.Command("serve", "Run it")
@@ -229,14 +226,14 @@ func main() {
 		log.Infof("args: %v", args)
 
 		client := newClient(*kubeconfig, *inCluster)
-		logger := logrus.New().WithField("context", "app")
+		//logger := logrus.New().WithField("context", "app")
 
 		dexClient, err := newDexClient(*dex_grpc_service)
 		if err != nil {
-			logger.Infof("Cannot contact Dex gRPC service at %s: %s", dex_grpc_service, err)
+			log.Infof("Cannot contact Dex gRPC service at %s: %s", dex_grpc_service, err)
 		}
 
-		c := NewDexK8sDynamicClientsApp(logger, dexClient)
+		c := NewDexK8sDynamicClientsApp(dexClient)
 		w := watchIngress(client, c)
 		w.Run(nil)
 	}

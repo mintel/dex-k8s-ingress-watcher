@@ -57,5 +57,6 @@ staticClients:
 # Issues
 
 - Secret is hard-coded. Do we even need it?
+- Verbosity
 - Not handling onUpdate event (not sure it's required)
 - No TLS support yet
