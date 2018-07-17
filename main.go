@@ -2,33 +2,22 @@
 // An application which watches for Ingresses and configures Dex clients via
 // gRPC dynamically, based on Ingress annotations.
 //
-// work-in-progress
-//
-// issues:
-//
-// dex does not support modifying redirecturis, but does support creating
-// static clients: https://github.com/coreos/dex/issues/1261
-
+// This is a helper tool to get around the fact that Dex does not support
+// wildcards in redirect-uris: https://github.com/coreos/dex/issues/1261
 //
 //
 //
+// Example ingress in kubernetes:
+//
+// apiVersion: extensions/v1beta1
+// kind: Ingress
+// metadata:
+//   annotations:
+// 	   mintel.com/dex-static-client-id: my-app
+//     mintel.com/dex-static-client-name: My Application
+// 	   mintel.com/dex-redirect-uri: https://my-app.svc.example.com/oauth/callback
 //
 //
-// - id: django-echoheaders
-// redirectURIs:
-// - 'https://django-echoheaders.svc.dev1.k8s-dev.mintel.com/oauth/callback'
-// name: 'Example App'
-// secret: 'a-secret'
-//
-
-// todo:
-//  module structure
-//  tests
-//  dex-client impl.
-//  certs for dex
-//  annotation parsing
-//  in-cluster yaml and image-building
-// check connection to grpc client
 package main
 
 import (
@@ -56,20 +45,19 @@ import (
 	_ "google.golang.org/grpc/credentials"
 )
 
+// App struct
 type DexK8sDynamicClientsApp struct {
 	logger    logrus.FieldLogger
 	dexClient api.DexClient
 }
 
-/*
-func extractAnnotationDetails(obj interface{}) {}
-
-https://github.com/coreos/dex/blob/master/examples/grpc-client/client.go
-func addDexClient() {}
-func removeDexClient() {}
-*/
-
+// Return a new Dex Client to perform gRPC calls with
 func newDexClient(hostAndPort string) (api.DexClient, error) {
+
+	//
+	// TODO: Add TLS options
+	//
+
 	//func newDexClient(hostAndPort, caPath, clientCrt, clientKey string) (api.DexClient, error) {
 	/*cPool := x509.NewCertPool()
 	caCert, err := ioutil.ReadFile(caPath)
@@ -101,7 +89,8 @@ func newDexClient(hostAndPort string) (api.DexClient, error) {
 }
 
 const (
-	// IngressKey picks a specific "class" for the Ingress.
+	// Define annotations we check for in the Ingress annotations
+	// metadata
 	IngressAnnotationDexStaticClientId          = "mintel.com/dex-static-client-id"
 	IngressAnnotationDexStaticClientName        = "mintel.com/dex-static-client-name"
 	IngressAnnotationDexStaticClientRedirectURI = "mintel.com/dex-redirect-uri"
@@ -111,6 +100,7 @@ const (
 	DexStaticClientSecret = "a-secret"
 )
 
+// Add Dex StaticClient via gRPC
 func (c *DexK8sDynamicClientsApp) addDexStaticClient(
 	ing *v1beta1.Ingress,
 	static_client_id string,
@@ -136,15 +126,16 @@ func (c *DexK8sDynamicClientsApp) addDexStaticClient(
 
 	if resp, err := c.dexClient.CreateClient(context.TODO(), req); err != nil {
 		c.logger.Errorf("Dex gRPC: Failed creating oauth2 client for Ingress '%s': %v", ing.Name, err)
-	} else {		
-		if (resp.AlreadyExists) {
-			c.logger.Errorf("Dex gPRC: client already exists for Ingress '%s'", ing.Name)			
+	} else {
+		if resp.AlreadyExists {
+			c.logger.Errorf("Dex gPRC: client already exists for Ingress '%s'", ing.Name)
 		} else {
-			c.logger.Infof("Dex gRPC: Successfully created client for Ingress '%s'", ing.Name)			
+			c.logger.Infof("Dex gRPC: Successfully created client for Ingress '%s'", ing.Name)
 		}
 	}
 }
 
+// Delete Dex StaticClient via gRPC
 func (c *DexK8sDynamicClientsApp) deleteDexStaticClient(
 	ing *v1beta1.Ingress,
 	static_client_id string) {
@@ -152,20 +143,19 @@ func (c *DexK8sDynamicClientsApp) deleteDexStaticClient(
 	c.logger.Infof("Deleting Ingress '%s'\n\tClient ID: %s", ing.Name, static_client_id)
 
 	req := &api.DeleteClientReq{
-		Id: static_client_id,		
+		Id: static_client_id,
 	}
 
 	if resp, err := c.dexClient.DeleteClient(context.TODO(), req); err != nil {
 		c.logger.Errorf("Dex gRPC: Failed deleting oauth2 client for Ingress '%s': %v", ing.Name, err)
-	} else {		
-		if (resp.NotFound) {
-			c.logger.Errorf("Dex gPRC: client '%s' could not be deleted for Ingress '%s' - not found '%s'", static_client_id, ing.Name)			
+	} else {
+		if resp.NotFound {
+			c.logger.Errorf("Dex gPRC: client '%s' could not be deleted for Ingress '%s' - not found '%s'", static_client_id, ing.Name)
 		} else {
-			c.logger.Infof("Dex gRPC: Successfully deleted client for Ingress '%s'", ing.Name)			
+			c.logger.Infof("Dex gRPC: Successfully deleted client for Ingress '%s'", ing.Name)
 		}
 	}
 }
-
 
 // Return a new app.
 func NewDexK8sDynamicClientsApp(logger logrus.FieldLogger, dexClient api.DexClient) *DexK8sDynamicClientsApp {
@@ -175,7 +165,7 @@ func NewDexK8sDynamicClientsApp(logger logrus.FieldLogger, dexClient api.DexClie
 	}
 }
 
-// Ingress event-handlers
+// Handle Ingress creation event
 func (c *DexK8sDynamicClientsApp) OnAdd(obj interface{}) {
 
 	ing, ok := obj.(*v1beta1.Ingress)
@@ -184,7 +174,6 @@ func (c *DexK8sDynamicClientsApp) OnAdd(obj interface{}) {
 	}
 
 	c.logger.Debugf("Checking Ingress creation '%s'...", ing.Name)
-
 	static_client_id, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientId]
 	if !ok {
 		c.logger.Debugf("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientId)
@@ -208,9 +197,11 @@ func (c *DexK8sDynamicClientsApp) OnAdd(obj interface{}) {
 	c.addDexStaticClient(ing, static_client_id, static_client_name, static_client_redirect_uri)
 }
 
+// Handle Ingress update event
+// TODO: Confirm if required
 func (c *DexK8sDynamicClientsApp) OnUpdate(oldObj, newObj interface{}) {}
 
-
+// Handle Ingress deletion event
 func (c *DexK8sDynamicClientsApp) OnDelete(obj interface{}) {
 
 	ing, ok := obj.(*v1beta1.Ingress)
@@ -233,6 +224,7 @@ func init() {
 	flag.Parse()
 }
 
+// Define usage and start the app
 func main() {
 	// Initialize logger.
 	log := logrus.StandardLogger()
@@ -242,15 +234,14 @@ func main() {
 	serve := app.Command("serve", "Run it")
 	inCluster := serve.Flag("incluster", "use in cluster configuration.").Bool()
 	kubeconfig := serve.Flag("kubeconfig", "path to kubeconfig (if not in running inside a cluster)").Default(filepath.Join(os.Getenv("HOME"), ".kube", "config")).String()
-	dex_grpc_service := serve.Flag("dex-grpc-service", "dex grpc service").Default("127.0.0.1.5557").String()
+	dex_grpc_service := serve.Flag("dex-grpc-address", "dex grpc address").Default("127.0.0.1.5557").String()
 
 	args := os.Args[1:]
 	switch kingpin.MustParse(app.Parse(args)) {
-	//default:
-	//	app.Usage(args)
-	//	os.Exit(2)
-	//case serve.FullCommand():
 	default:
+		app.Usage(args)
+		os.Exit(2)
+	case serve.FullCommand():
 		log.Infof("args: %v", args)
 
 		client := newClient(*kubeconfig, *inCluster)
