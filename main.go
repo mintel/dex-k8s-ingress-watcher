@@ -217,7 +217,7 @@ func main() {
 	serve := app.Command("serve", "Run it")
 	inCluster := serve.Flag("incluster", "use in cluster configuration.").Bool()
 	kubeconfig := serve.Flag("kubeconfig", "path to kubeconfig (if not in running inside a cluster)").Default(filepath.Join(os.Getenv("HOME"), ".kube", "config")).String()
-	dexGrpcService := serve.Flag("dex-grpc-address", "dex grpc address").Default("127.0.0.1.5557").String()
+	dexGrpcService := serve.Flag("dex-grpc-address", "dex grpc address").Default("127.0.0.1:5557").String()
 
 	caCrtPath := serve.Flag("ca-crt", "CA certificate path").String()
 	clientCrtPath := serve.Flag("client-crt", "client certificate path").String()
