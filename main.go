@@ -161,21 +161,21 @@ func (c *DexK8sDynamicClientsApp) OnAdd(obj interface{}) {
 	log.Infof("Checking Ingress creation '%s'...", ing.Name)
 	static_client_id, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientId]
 	if !ok {
-		log.Infof("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientId)
+		log.Infof("Ignoring Ingress '%s' - missing %s", ing.Name, IngressAnnotationDexStaticClientId)
 		return
 	}
 
 	static_client_name, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientName]
 
 	if !ok {
-		log.Infof("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientName)
+		log.Infof("Ignoring Ingress '%s' - missing %s", ing.Name, IngressAnnotationDexStaticClientName)
 		return
 	}
 
 	static_client_redirect_uri, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientRedirectURI]
 
 	if !ok {
-		log.Infof("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientRedirectURI)
+		log.Infof("Ignoring Ingress '%s' - missing %s", ing.Name, IngressAnnotationDexStaticClientRedirectURI)
 		return
 	}
 
@@ -198,7 +198,7 @@ func (c *DexK8sDynamicClientsApp) OnDelete(obj interface{}) {
 
 	static_client_id, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientId]
 	if !ok {
-		log.Debugf("Ignoring Ingress '%s' - missing %s ", ing.Name, IngressAnnotationDexStaticClientId)
+		log.Debugf("Ignoring Ingress '%s' - missing %s", ing.Name, IngressAnnotationDexStaticClientId)
 		return
 	}
 
