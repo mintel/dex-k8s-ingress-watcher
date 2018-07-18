@@ -105,7 +105,7 @@ May want to look at injecting this automatically oneday using k8s webhooks:
 
 # Issues
 
-- Secret is hard-coded. Do we even need it?
-- Verbosity
+- Secret is hard-coded, and looks like it's required
 - Not handling onUpdate event (not sure it's required)
-- No TLS support yet
+- TODO: Test TLS support
+- TODO: Verbosity and optional JSON output
