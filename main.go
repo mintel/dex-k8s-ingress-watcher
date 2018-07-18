@@ -1,23 +1,23 @@
 //
 // An application which watches for Ingresses and configures Dex clients via
 // gRPC dynamically, based on Ingress annotations.
+//
 package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
 
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
-
 	"k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/fields"
-
-	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 	"k8s.io/client-go/rest"
@@ -26,7 +26,10 @@ import (
 
 	"github.com/coreos/dex/api"
 	"google.golang.org/grpc"
-	_ "google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials"
+
+	log "github.com/sirupsen/logrus"
+	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
 // App struct
@@ -34,41 +37,44 @@ type DexK8sDynamicClientsApp struct {
 	dexClient api.DexClient
 }
 
+// Fetch dex version
+func checkDexConnection(dexClient api.DexClient) {
+	req := &api.VersionReq{}
+	resp, err := dexClient.GetVersion(context.TODO(), req)
+	exitOnError(err)
+
+	log.Infof("Dex gRPC Version: %v", resp.Server)
+}
+
 // Return a new Dex Client to perform gRPC calls with
-func newDexClient(hostAndPort string) (api.DexClient, error) {
+func newDexClient(grpcAddress string, caPath string, clientCrtPath string, clientKeyPath string) api.DexClient {
+	if caPath != "" && clientCrtPath != "" && clientKeyPath != "" {
+		cPool := x509.NewCertPool()
 
-	//
-	// TODO: Add TLS options
-	//
+		caCert, err := ioutil.ReadFile(caPath)
+		exitOnError(err)
 
-	//func newDexClient(hostAndPort, caPath, clientCrt, clientKey string) (api.DexClient, error) {
-	/*cPool := x509.NewCertPool()
-	caCert, err := ioutil.ReadFile(caPath)
-	if err != nil {
-		return nil, fmt.Errorf("invalid CA crt file: %s", caPath)
-	}
-	if cPool.AppendCertsFromPEM(caCert) != true {
-		return nil, fmt.Errorf("failed to parse CA crt")
+		if cPool.AppendCertsFromPEM(caCert) != true {
+			log.Errorf("failed to parse CA crt")
+		}
+
+		clientCert, err := tls.LoadX509KeyPair(clientCrtPath, clientKeyPath)
+		exitOnError(err)
+
+		clientTLSConfig := &tls.Config{
+			RootCAs:      cPool,
+			Certificates: []tls.Certificate{clientCert},
+		}
+		creds := credentials.NewTLS(clientTLSConfig)
+		conn, err := grpc.Dial(grpcAddress, grpc.WithTransportCredentials(creds))
+		exitOnError(err)
+		return api.NewDexClient(conn)
+	} else {
+		conn, err := grpc.Dial(grpcAddress, grpc.WithInsecure())
+		exitOnError(err)
+		return api.NewDexClient(conn)
 	}
 
-	clientCert, err := tls.LoadX509KeyPair(clientCrt, clientKey)
-	if err != nil {
-		return nil, fmt.Errorf("invalid client crt file: %s", caPath)
-	}
-
-	clientTLSConfig := &tls.Config{
-		RootCAs:      cPool,
-		Certificates: []tls.Certificate{clientCert},
-	}
-	creds := credentials.NewTLS(clientTLSConfig)
-	conn, err := grpc.Dial(hostAndPort, grpc.WithTransportCredentials(creds))
-	*/
-	//conn, err := grpc.Dial(hostAndPort)
-	conn, err := grpc.Dial(hostAndPort, grpc.WithInsecure())
-	if err != nil {
-		return nil, fmt.Errorf("dex dial: %v", err)
-	}
-	return api.NewDexClient(conn), nil
 }
 
 const (
@@ -107,14 +113,12 @@ func (c *DexK8sDynamicClientsApp) addDexStaticClient(
 		},
 	}
 
-	if resp, err := c.dexClient.CreateClient(context.TODO(), req); err != nil {
-		log.Errorf("Dex gRPC: Failed creating oauth2 client for Ingress '%s': %v", ing.Name, err)
+	resp, err := c.dexClient.CreateClient(context.TODO(), req)
+	exitOnError(err)
+	if resp.AlreadyExists {
+		log.Warnf("Dex gPRC: client already exists for Ingress '%s'", ing.Name)
 	} else {
-		if resp.AlreadyExists {
-			log.Warnf("Dex gPRC: client already exists for Ingress '%s'", ing.Name)
-		} else {
-			log.Infof("Dex gRPC: Successfully created client for Ingress '%s'", ing.Name)
-		}
+		log.Infof("Dex gRPC: Successfully created client for Ingress '%s'", ing.Name)
 	}
 }
 
@@ -129,14 +133,12 @@ func (c *DexK8sDynamicClientsApp) deleteDexStaticClient(
 		Id: static_client_id,
 	}
 
-	if resp, err := c.dexClient.DeleteClient(context.TODO(), req); err != nil {
-		log.Errorf("Dex gRPC: Failed deleting oauth2 client for Ingress '%s': %v", ing.Name, err)
+	resp, err := c.dexClient.DeleteClient(context.TODO(), req)
+	exitOnError(err)
+	if resp.NotFound {
+		log.Errorf("Dex gPRC: client '%s' could not be deleted for Ingress '%s' - not found '%s'", static_client_id, ing.Name)
 	} else {
-		if resp.NotFound {
-			log.Errorf("Dex gPRC: client '%s' could not be deleted for Ingress '%s' - not found '%s'", static_client_id, ing.Name)
-		} else {
-			log.Infof("Dex gRPC: Successfully deleted client for Ingress '%s'", ing.Name)
-		}
+		log.Infof("Dex gRPC: Successfully deleted client for Ingress '%s'", ing.Name)
 	}
 }
 
@@ -204,18 +206,22 @@ func (c *DexK8sDynamicClientsApp) OnDelete(obj interface{}) {
 }
 
 func init() {
-	flag.Parse()	
+	flag.Parse()
 }
 
 // Define usage and start the app
 func main() {
-	// Initialize logger.	
+	// Initialize logger.
 	app := kingpin.New("app", "Create Dex client based of Ingress")
 
 	serve := app.Command("serve", "Run it")
 	inCluster := serve.Flag("incluster", "use in cluster configuration.").Bool()
 	kubeconfig := serve.Flag("kubeconfig", "path to kubeconfig (if not in running inside a cluster)").Default(filepath.Join(os.Getenv("HOME"), ".kube", "config")).String()
-	dex_grpc_service := serve.Flag("dex-grpc-address", "dex grpc address").Default("127.0.0.1.5557").String()
+	dexGrpcService := serve.Flag("dex-grpc-address", "dex grpc address").Default("127.0.0.1.5557").String()
+
+	caCrtPath := serve.Flag("ca-crt", "CA certificate path").String()
+	clientCrtPath := serve.Flag("client-crt", "client certificate path").String()
+	clientKeyPath := serve.Flag("client-key", "client key path").String()
 
 	args := os.Args[1:]
 	switch kingpin.MustParse(app.Parse(args)) {
@@ -226,12 +232,9 @@ func main() {
 		log.Infof("args: %v", args)
 
 		client := newClient(*kubeconfig, *inCluster)
-		//logger := logrus.New().WithField("context", "app")
+		dexClient := newDexClient(*dexGrpcService, *caCrtPath, *clientCrtPath, *clientKeyPath)
 
-		dexClient, err := newDexClient(*dex_grpc_service)
-		if err != nil {
-			log.Infof("Cannot contact Dex gRPC service at %s: %s", dex_grpc_service, err)
-		}
+		checkDexConnection(dexClient)
 
 		c := NewDexK8sDynamicClientsApp(dexClient)
 		w := watchIngress(client, c)
