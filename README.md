@@ -107,5 +107,7 @@ May want to look at injecting this automatically oneday using k8s webhooks:
 
 - Secret is hard-coded, and looks like it's required
 - Not handling onUpdate event (not sure it's required)
+- TODO: Re-structure code
 - TODO: Test TLS support
-- TODO: Verbosity and optional JSON output
+- TODO: Set --verbose mode 
+-

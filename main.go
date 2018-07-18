@@ -37,6 +37,18 @@ type DexK8sDynamicClientsApp struct {
 	dexClient api.DexClient
 }
 
+const (
+	// Define annotations we check for in the Ingress annotations
+	// metadata
+	IngressAnnotationDexStaticClientId          = "mintel.com/dex-k8s-ingress-watcher-client-id"
+	IngressAnnotationDexStaticClientName        = "mintel.com/dex-k8s-ingress-watcher-client-name"
+	IngressAnnotationDexStaticClientRedirectURI = "mintel.com/dex-k8s-ingress-watcher-redirect-uri"
+)
+
+const (
+	DexStaticClientSecret = "a-secret"
+)
+
 // Fetch dex version
 func checkDexConnection(dexClient api.DexClient) {
 	req := &api.VersionReq{}
@@ -76,18 +88,6 @@ func newDexClient(grpcAddress string, caPath string, clientCrtPath string, clien
 	}
 
 }
-
-const (
-	// Define annotations we check for in the Ingress annotations
-	// metadata
-	IngressAnnotationDexStaticClientId          = "mintel.com/dex-k8s-ingress-watcher-client-id"
-	IngressAnnotationDexStaticClientName        = "mintel.com/dex-k8s-ingress-watcher-client-name"
-	IngressAnnotationDexStaticClientRedirectURI = "mintel.com/dex-k8s-ingress-watcher-redirect-uri"
-)
-
-const (
-	DexStaticClientSecret = "a-secret"
-)
 
 // Add Dex StaticClient via gRPC
 func (c *DexK8sDynamicClientsApp) addDexStaticClient(
@@ -205,43 +205,6 @@ func (c *DexK8sDynamicClientsApp) OnDelete(obj interface{}) {
 	c.deleteDexStaticClient(ing, static_client_id)
 }
 
-func init() {
-	flag.Parse()
-}
-
-// Define usage and start the app
-func main() {
-	// Initialize logger.
-	app := kingpin.New("app", "Create Dex client based of Ingress")
-
-	serve := app.Command("serve", "Run it")
-	inCluster := serve.Flag("incluster", "use in cluster configuration.").Bool()
-	kubeconfig := serve.Flag("kubeconfig", "path to kubeconfig (if not in running inside a cluster)").Default(filepath.Join(os.Getenv("HOME"), ".kube", "config")).String()
-	dexGrpcService := serve.Flag("dex-grpc-address", "dex grpc address").Default("127.0.0.1:5557").String()
-
-	caCrtPath := serve.Flag("ca-crt", "CA certificate path").String()
-	clientCrtPath := serve.Flag("client-crt", "client certificate path").String()
-	clientKeyPath := serve.Flag("client-key", "client key path").String()
-
-	args := os.Args[1:]
-	switch kingpin.MustParse(app.Parse(args)) {
-	default:
-		app.Usage(args)
-		os.Exit(2)
-	case serve.FullCommand():
-		log.Infof("args: %v", args)
-
-		client := newClient(*kubeconfig, *inCluster)
-		dexClient := newDexClient(*dexGrpcService, *caCrtPath, *clientCrtPath, *clientKeyPath)
-
-		checkDexConnection(dexClient)
-
-		c := NewDexK8sDynamicClientsApp(dexClient)
-		w := watchIngress(client, c)
-		w.Run(nil)
-	}
-}
-
 // Return a new k8s client based on local or in-cluster configuration
 func newClient(kubeconfig string, inCluster bool) *kubernetes.Clientset {
 	var err error
@@ -274,5 +237,47 @@ func exitOnError(err error) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
+	}
+}
+
+func init() {
+	flag.Parse()
+}
+
+// Define usage and start the app
+func main() {
+	// Initialize logger.
+	app := kingpin.New("app", "Create Dex client based of Ingress")
+
+	serve := app.Command("serve", "Run it")
+	inCluster := serve.Flag("incluster", "use in cluster configuration.").Bool()
+	kubeconfig := serve.Flag("kubeconfig", "path to kubeconfig (if not in running inside a cluster)").Default(filepath.Join(os.Getenv("HOME"), ".kube", "config")).String()
+	dexGrpcService := serve.Flag("dex-grpc-address", "dex grpc address").Default("127.0.0.1:5557").String()
+	logJson := serve.Flag("log-json", "set log formatter to json").Bool()
+
+	caCrtPath := serve.Flag("ca-crt", "CA certificate path").String()
+	clientCrtPath := serve.Flag("client-crt", "client certificate path").String()
+	clientKeyPath := serve.Flag("client-key", "client key path").String()
+
+	args := os.Args[1:]
+	switch kingpin.MustParse(app.Parse(args)) {
+	default:
+		app.Usage(args)
+		os.Exit(2)
+	case serve.FullCommand():
+		log.Infof("args: %v", args)
+
+		if *logJson {
+			log.SetFormatter(&log.JSONFormatter{})
+		}
+
+		client := newClient(*kubeconfig, *inCluster)
+		dexClient := newDexClient(*dexGrpcService, *caCrtPath, *clientCrtPath, *clientKeyPath)
+
+		checkDexConnection(dexClient)
+
+		c := NewDexK8sDynamicClientsApp(dexClient)
+		w := watchIngress(client, c)
+		w.Run(nil)
 	}
 }
