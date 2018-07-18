@@ -154,7 +154,7 @@ func (c *DexK8sDynamicClientsApp) OnAdd(obj interface{}) {
 
 	ing, ok := obj.(*v1beta1.Ingress)
 	if !ok {
-		log.Infof("WTF")
+		log.Warnf("Got an unexpected object instead of an Ingress")
 		return
 	}
 
