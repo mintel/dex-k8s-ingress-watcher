@@ -43,10 +43,7 @@ const (
 	IngressAnnotationDexStaticClientId          = "mintel.com/dex-k8s-ingress-watcher-client-id"
 	IngressAnnotationDexStaticClientName        = "mintel.com/dex-k8s-ingress-watcher-client-name"
 	IngressAnnotationDexStaticClientRedirectURI = "mintel.com/dex-k8s-ingress-watcher-redirect-uri"
-)
-
-const (
-	DexStaticClientSecret = "a-secret"
+	IngressAnnotationDexStaticClientSecret      = "mintel.com/dex-k8s-ingress-watcher-secret"
 )
 
 // Fetch dex version
@@ -94,12 +91,12 @@ func (c *DexK8sDynamicClientsApp) addDexStaticClient(
 	ing *v1beta1.Ingress,
 	static_client_id string,
 	static_client_name string,
-	static_client_redirect_uri string) {
+	static_client_redirect_uri string,
+	static_client_secret string) {
 
-	log.Infof("Registering Ingress '%s'\n\tClient ID: %s\n\tClient Name: %s\n\tRedirectURI: %s",
+	log.Infof("Registering Ingress '%s' with static client '%s' at callback '%s'",
 		ing.Name,
 		static_client_id,
-		static_client_name,
 		static_client_redirect_uri)
 
 	redirect_uris := []string{static_client_redirect_uri}
@@ -108,7 +105,7 @@ func (c *DexK8sDynamicClientsApp) addDexStaticClient(
 		Client: &api.Client{
 			Id:           static_client_id,
 			Name:         static_client_name,
-			Secret:       DexStaticClientSecret,
+			Secret:       static_client_secret,
 			RedirectUris: redirect_uris,
 		},
 	}
@@ -168,8 +165,8 @@ func (c *DexK8sDynamicClientsApp) OnAdd(obj interface{}) {
 	static_client_name, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientName]
 
 	if !ok {
-		log.Infof("Ignoring Ingress '%s' - missing %s", ing.Name, IngressAnnotationDexStaticClientName)
-		return
+		// Default to using the ID
+		static_client_name = static_client_id
 	}
 
 	static_client_redirect_uri, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientRedirectURI]
@@ -179,7 +176,14 @@ func (c *DexK8sDynamicClientsApp) OnAdd(obj interface{}) {
 		return
 	}
 
-	c.addDexStaticClient(ing, static_client_id, static_client_name, static_client_redirect_uri)
+	static_client_secret, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientSecret]
+
+	if !ok {
+		log.Infof("Ignoring Ingress '%s' - missing %s", ing.Name, IngressAnnotationDexStaticClientSecret)
+		return
+	}
+
+	c.addDexStaticClient(ing, static_client_id, static_client_name, static_client_redirect_uri, static_client_secret)
 }
 
 // Handle Ingress update event

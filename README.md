@@ -39,8 +39,8 @@ metadata:
   annotations:
     mintel.com/dex-k8s-ingress-watcher-client-id: my-app
     mintel.com/dex-k8s-ingress-watcher-client-name: My Application
+    mintel.com/dex-k8s-ingress-watcher-secret: a-secret
     mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://myapp.example.com/oauth/callback
-
 ```
 
 Such an annotation would generate in Dex the following `staticClient`
@@ -49,9 +49,12 @@ Such an annotation would generate in Dex the following `staticClient`
 staticClients:
 - id: my-app
   name: My Application
+  secret: a-secret
   redirectURIs:
   - 'https://myapp.example.com/oauth/callback'
 ```
+
+Note that `mintel.com/dex-k8s-ingress-watcher-client-name` is optional, and the rest are required.
 
 ## Client application configuration
 
@@ -105,9 +108,7 @@ May want to look at injecting this automatically oneday using k8s webhooks:
 
 # Issues
 
-- Secret is hard-coded, and looks like it's required
 - Not handling onUpdate event (not sure it's required)
 - TODO: Re-structure code
 - TODO: Test TLS support
 - TODO: Set --verbose mode 
--
