@@ -4,7 +4,6 @@ services:
 
 stages:
 - build
-- release
 
 variables:
   LATEST_IMAGE: $CI_REGISTRY_IMAGE:latest
@@ -12,7 +11,8 @@ variables:
 
 before_script:
   - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN registry.gitlab.com
-build:
+
+build_latest:
   tags: 
     - mintel
   stage: build
@@ -22,10 +22,10 @@ build:
   only:
     - master
 
-release-image:
+build_tag:
   tags: 
     - mintel
-  stage: release
+  stage: build
   script:
     - docker build -t $RELEASE_IMAGE .
     - docker push $RELEASE_IMAGE
