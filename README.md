@@ -6,6 +6,8 @@ configuration via gRPC.
 This is to get around the issue that Dex does not support wildcards in it's
 redirectURI option.
 
+When a new Ingress is spotted, this application will use the annotations 
+defined in the Ingress to add a new `staticClient` entry in Dex.
 
 ## Building
 
@@ -56,9 +58,38 @@ staticClients:
 
 Note that `mintel.com/dex-k8s-ingress-watcher-client-name` is optional, and the rest are required.
 
-## Client application configuration
+## Running in Kubernetes
 
-We typically run an OpenID proxy service as a sidecar against applications we want to protect via Dex.
+We run this application as a sidecar to Dex itself - that way it can talk over gRPC via 
+localhost.
+
+In this example, Dex is running on `127.0.0.1` with gRPC exposed on port `5557`.
+
+Example sidecar configuration:
+
+```
+  - name: dex-k8s-ingress-watcher
+    command:
+    - /app/bin/dex-k8s-ingress-watcher
+    - serve
+    - --incluster
+    - --dex-grpc-address
+    - 127.0.0.1:5557
+    image: mintel/dex-k8s-ingress-watcher:latest
+    imagePullPolicy: IfNotPresent
+    resources:
+      limits:
+        cpu: 50m
+        memory: 64Mi
+      requests:
+        cpu: 20m
+        memory: 32Mi
+```
+
+## Authenticated client application configuration
+
+An application wishing to authenticate via Dex can typically run an OpenID proxy service as a
+sidecar container.
 
 A good example is [keycloak-proxy](https://github.com/gambol99/keycloak-proxy)
 
@@ -104,9 +135,9 @@ May want to look at injecting this automatically oneday using k8s webhooks:
 
 - https://github.com/istio/istio/tree/master/pilot/pkg/kube/inject
 
-# Issues
+# TODO
 
-- Not handling onUpdate event (not sure it's required)
-- TODO: Re-structure code
-- TODO: Test TLS support
-- TODO: Set --verbose mode 
+- Handle onUpdate event
+- Tidy up structure of code
+- Test TLS support
+- Set --verbose mode 
