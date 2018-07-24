@@ -94,17 +94,15 @@ Example sidecar configuration:
 ```
 
 Key points to note:
-- Ingress points at this
+- Your Ingress and Service must point at the keycloak proxy port, i.e `3000` in this example
 - Proxy has an `upstream-url` which is the application you want to product (running on same host, different port)
-- `keycloak` lets you protect by `resources=uri` option, restricting by groups returned by Dex if required
-- `client-secret` is hard-coded in this app
+- `client-secret` must match the `mintel.com/dex-k8s-ingress-watcher-secret` annotation
 - `client-id` must match the `mintel.com/dex-k8s-ingress-watcher-client-id` annotation
+- `keycloak` lets you protect by `resources=uri` option, restricting by groups returned by Dex if required
 
 May want to look at injecting this automatically oneday using k8s webhooks:
 
 - https://github.com/istio/istio/tree/master/pilot/pkg/kube/inject
-
-
 
 # Issues
 
