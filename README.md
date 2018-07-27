@@ -135,6 +135,10 @@ May want to look at injecting this automatically oneday using k8s webhooks:
 
 - https://github.com/istio/istio/tree/master/pilot/pkg/kube/inject
 
+# Limitations
+
+- Does not support multiple host definitions in the annotation, as we need to have a specific callbackup uri.
+
 # TODO
 
 - Handle onUpdate event
