@@ -137,7 +137,7 @@ May want to look at injecting this automatically oneday using k8s webhooks:
 
 # Limitations
 
-- Does not support multiple host definitions in the annotation, as we need to have a specific callbackup uri.
+- Does not support multiple host definitions in the Ingress, as the annotation only supports a single callback uri.
 
 # TODO
 
