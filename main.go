@@ -187,8 +187,11 @@ func (c *DexK8sDynamicClientsApp) OnAdd(obj interface{}) {
 }
 
 // Handle Ingress update event
-// TODO: Confirm if required
-func (c *DexK8sDynamicClientsApp) OnUpdate(oldObj, newObj interface{}) {}
+func (c *DexK8sDynamicClientsApp) OnUpdate(oldObj, newObj interface{}) {
+
+	c.OnDelete(oldObj)
+	c.OnAdd(newObj)
+}
 
 // Handle Ingress deletion event
 func (c *DexK8sDynamicClientsApp) OnDelete(obj interface{}) {
