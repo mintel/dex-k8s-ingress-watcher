@@ -141,7 +141,6 @@ May want to look at injecting this automatically oneday using k8s webhooks:
 
 # TODO
 
-- Handle onUpdate event
 - Tidy up structure of code
 - Test TLS support
 - Set --verbose mode 
