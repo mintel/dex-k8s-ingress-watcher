@@ -124,7 +124,7 @@ func (c *DexK8sDynamicClientsApp) deleteDexStaticClient(
 	ing *v1beta1.Ingress,
 	static_client_id string) {
 
-	log.Infof("Deleting Ingress '%s' with statuc client '%s'", ing.Name, static_client_id)
+	log.Infof("Deleting Ingress '%s' with static client '%s'", ing.Name, static_client_id)
 
 	req := &api.DeleteClientReq{
 		Id: static_client_id,
