@@ -1,4 +1,4 @@
-FROM golang:1.10.1-alpine3.7
+FROM golang:1.12-alpine3.10
 
 RUN apk add --no-cache --update alpine-sdk bash && \
     curl -fsSL -o /usr/local/bin/dep https://github.com/golang/dep/releases/download/v0.4.1/dep-linux-amd64 && \
@@ -8,7 +8,7 @@ COPY . /go/src/gitlab.com/mintel/dex-k8s-ingress-watcher
 WORKDIR /go/src/gitlab.com/mintel/dex-k8s-ingress-watcher
 RUN make build
 
-FROM alpine:3.7
+FROM alpine:3.10.1
 
 RUN apk add --update ca-certificates openssl curl \
     && addgroup -S mintel && adduser -S mintel -G mintel
