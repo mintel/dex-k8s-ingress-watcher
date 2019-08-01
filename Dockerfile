@@ -9,18 +9,23 @@ WORKDIR /go/src/gitlab.com/mintel/dex-k8s-ingress-watcher
 RUN make build
 
 FROM alpine:3.7
-RUN apk add --update ca-certificates openssl curl
+
+RUN apk add --update ca-certificates openssl curl \
+    && addgroup -S mintel && adduser -S mintel -G mintel
 
 RUN mkdir -p /app/bin
 COPY --from=0 /go/src/gitlab.com/mintel/dex-k8s-ingress-watcher/bin/dex-k8s-ingress-watcher /app/bin/dex-k8s-ingress-watcher
 
-# Add any required certs/key by mounting a volume on /certs - Entrypoint will copy them and run update-ca-certificates at startup
+# Add any required certs/key by mounting a volume on /certs
+# The entrypoint will copy them and run update-ca-certificates at startup
 RUN mkdir -p /certs
 
 WORKDIR /app
 
 COPY entrypoint.sh /
 RUN chmod a+x /entrypoint.sh
+
+USER mintel
 
 ENTRYPOINT ["/entrypoint.sh"]
 
