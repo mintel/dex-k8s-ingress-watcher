@@ -1,20 +1,28 @@
-FROM golang:1.10.1-alpine3.7
+FROM golang:1.12-alpine3.10
 
-RUN apk add --no-cache --update alpine-sdk bash && \
-    curl -fsSL -o /usr/local/bin/dep https://github.com/golang/dep/releases/download/v0.4.1/dep-linux-amd64 && \
-    chmod +x /usr/local/bin/dep
 
-COPY . /go/src/gitlab.com/mintel/dex-k8s-ingress-watcher
-WORKDIR /go/src/gitlab.com/mintel/dex-k8s-ingress-watcher
+RUN apk add --no-cache --update alpine-sdk bash
+
+ENV GO111MODULE=on
+
+WORKDIR /app
+
+COPY go.mod .
+COPY go.sum .
+
+RUN go mod download
+
+COPY . .
+
 RUN make build
 
-FROM alpine:3.7
+FROM alpine:3.10.1
 
 RUN apk add --update ca-certificates openssl curl \
     && addgroup -S mintel && adduser -S mintel -G mintel
 
 RUN mkdir -p /app/bin
-COPY --from=0 /go/src/gitlab.com/mintel/dex-k8s-ingress-watcher/bin/dex-k8s-ingress-watcher /app/bin/dex-k8s-ingress-watcher
+COPY --from=0 /app/bin/dex-k8s-ingress-watcher /app/bin/
 
 # Add any required certs/key by mounting a volume on /certs
 # The entrypoint will copy them and run update-ca-certificates at startup
