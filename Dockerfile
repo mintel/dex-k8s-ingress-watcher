@@ -18,8 +18,9 @@ RUN make build
 
 FROM alpine:3.10.1
 
-RUN apk add --update ca-certificates openssl curl \
-    && addgroup -S mintel && adduser -S mintel -G mintel
+RUN apk add --update ca-certificates openssl curl && \
+    addgroup -g 1000 -S mintel && \
+    adduser -u 1000 -S mintel -G mintel
 
 RUN mkdir -p /app/bin
 COPY --from=0 /app/bin/dex-k8s-ingress-watcher /app/bin/
@@ -33,7 +34,7 @@ WORKDIR /app
 COPY entrypoint.sh /
 RUN chmod a+x /entrypoint.sh
 
-USER mintel
+USER 1000:1000
 
 ENTRYPOINT ["/entrypoint.sh"]
 
