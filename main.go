@@ -10,11 +10,8 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
+	"github.com/etherlabsio/healthcheck"
 	"io/ioutil"
-	"os"
-	"path/filepath"
-	"time"
-
 	"k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -23,6 +20,10 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/coreos/dex/api"
 	"google.golang.org/grpc"
@@ -45,15 +46,6 @@ const (
 	IngressAnnotationDexStaticClientRedirectURI = "mintel.com/dex-k8s-ingress-watcher-redirect-uri"
 	IngressAnnotationDexStaticClientSecret      = "mintel.com/dex-k8s-ingress-watcher-secret"
 )
-
-// Fetch dex version
-func checkDexConnection(dexClient api.DexClient) {
-	req := &api.VersionReq{}
-	resp, err := dexClient.GetVersion(context.TODO(), req)
-	exitOnError(err)
-
-	log.Infof("Dex gRPC Version: %v", resp.Server)
-}
 
 // Return a new Dex Client to perform gRPC calls with
 func newDexClient(grpcAddress string, caPath string, clientCrtPath string, clientKeyPath string) api.DexClient {
@@ -272,6 +264,7 @@ func main() {
 		app.Usage(args)
 		os.Exit(2)
 	case serve.FullCommand():
+
 		log.Infof("args: %v", args)
 
 		if *logJson {
@@ -281,10 +274,36 @@ func main() {
 		client := newClient(*kubeconfig, *inCluster)
 		dexClient := newDexClient(*dexGrpcService, *caCrtPath, *clientCrtPath, *clientKeyPath)
 
-		checkDexConnection(dexClient)
+		r := http.NewServeMux()
+		r.Handle("/healthz", healthcheck.Handler(
+			healthcheck.WithChecker(
+				"local", healthcheck.CheckerFunc(
+					func(ctx context.Context) error {
+						// always pass if we get this far
+						return nil
+					},
+				),
+			),
+		))
+
+		r.Handle("/readiness", healthcheck.Handler(
+			healthcheck.WithChecker(
+				"dex-grpc", healthcheck.CheckerFunc(
+					func(ctx context.Context) error {
+						// ping dex
+						req := &api.VersionReq{}
+						_, err := dexClient.GetVersion(context.TODO(), req)
+						return err
+					},
+				),
+			),
+		))
+
+		http.ListenAndServe(":8080", r)
 
 		c := NewDexK8sDynamicClientsApp(dexClient)
 		w := watchIngress(client, c)
 		w.Run(nil)
 	}
+
 }
