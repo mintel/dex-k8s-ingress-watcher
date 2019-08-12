@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [v0.3.0]
+
+### Added 
+
+- Added /healthz and /readiness endpoints
+
 ## [v0.2.0]
 
 ### Changed
