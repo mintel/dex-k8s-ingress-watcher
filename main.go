@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
