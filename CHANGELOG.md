@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [v0.3.1]
+
+### Fixed 
+
+- Fixed blocking call in previous `v0.3.0` release
+
 ## [v0.3.0]
 
 ### Added 
