@@ -299,7 +299,9 @@ func main() {
 			),
 		))
 
-		http.ListenAndServe(":8080", r)
+		go func() {
+			http.ListenAndServe(":8080", r)
+		}()
 
 		c := NewDexK8sDynamicClientsApp(dexClient)
 		w := watchIngress(client, c)
