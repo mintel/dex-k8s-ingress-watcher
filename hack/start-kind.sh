@@ -171,7 +171,7 @@ data:
     staticPasswords:
     - email: "admin@example.com"
       # bcrypt hash of the string "password"
-      hash: "$2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W"
+      hash: "\$2a\$10\$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W"
       username: "admin"
       userID: "08a8684b-db88-4b73-90a9-3cd1661f5466"
 kind: ConfigMap
@@ -353,7 +353,7 @@ spec:
           items:
           - key: config.yaml
             path: config.yaml
-          name: dex-kcb727h4t6
+          name: dex
         name: config
 EOF
 
