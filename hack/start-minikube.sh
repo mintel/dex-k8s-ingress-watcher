@@ -1,53 +1,23 @@
 #!/usr/bin/env bash
 set -e
 
-command -v kind >/dev/null 2>/dev/null
+command -v minikube >/dev/null 2>/dev/null
 if [ $? -ne 0 ]; then 
   echo "You need to download KIND from https://github.com/kubernetes-sigs/kind/releases" 
   exit 1
 fi
-version=$(kind version)
 
-if [[ $version =~ ^v0.(4).[0-9]$ ]]; then
-  echo "Starting up cluster"
-else
-  echo "Supported version are:" 
-  echo " - 0.4.0"
-  exit 1
-fi
+K8S_VERSION="${K8S_VERSION:-v1.13.7}"
+MINIKUBE_DRIVER="${MINIKUBE_DRIVER:-kvm2}"
+MINIKUBE_CPUS="${MINIKUBE_CPUS:-2}"
+MINIKUBE_RAM="${MINIKUBE_RAM:-4096}"
 
-K8S_VERSION="${K8S_VERSION:-v1.13.7@sha256:f3f1cfc2318d1eb88d91253a9c5fa45f6e9121b6b1e65aea6c7ef59f1549aaaf}"
-K8S_WORKERS="${K8S_WORKERS:-1}"
+unset KUBECONFIG
 
-configfile=$(mktemp)
+function start_minikube() {
 
-function start_kind() {
-    cat > $configfile <<EOF
-kind: Cluster
-apiVersion: kind.sigs.k8s.io/v1alpha3
-networking:
-  apiServerAddress: 0.0.0.0
-  # Disable default CNI and install flannel to get around DIND issues
-  disableDefaultCNI: true
-nodes:
-- role: control-plane
-  image: kindest/node:${K8S_VERSION}
-EOF
+  minikube start --vm-driver=${MINIKUBE_DRIVER} --wait=true --cpus 2 --memory 4096 --kubernetes-version=${K8S_VERSION}
 
-for i in `seq 1 ${K8S_WORKERS}`;
-do
-    cat >> $configfile <<EOF
-- role: worker
-  image: kindest/node:${K8S_VERSION}
-EOF
-done
-
-    kind create cluster --config $configfile
-
-    export KUBECONFIG="$(kind get kubeconfig-path --name="kind")"
-    
-    # install flannel
-    kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/v0.11.0/Documentation/kube-flannel.yml
 }
 
 function load_image() {                                                                 
@@ -56,20 +26,14 @@ function load_image() {
 }  
 
 function install_ingress() {
-    export KUBECONFIG="$(kind get kubeconfig-path --name="kind")"
-    kubectl apply -f https://raw.githubusercontent.com/containous/traefik/v1.7/examples/k8s/traefik-rbac.yaml >&2
-    kubectl apply -f https://raw.githubusercontent.com/containous/traefik/v1.7/examples/k8s/traefik-deployment.yaml >&2
-    kubectl rollout status -n kube-system deployment traefik-ingress-controller --timeout=180s >&2
-
-    IP=$(kubectl get pod -n kube-system -l k8s-app=traefik-ingress-lb -o json | jq '.items[0].status.hostIP' -r)
-    PORT=$(kubectl get services -n kube-system traefik-ingress-service -o json | jq -r '.spec.ports[] | select(.name=="web")|.nodePort')
-
-    echo "http://${IP}:${PORT}"
+    minikube addons enable ingress
+    sleep 5
+    kubectl rollout status -n kube-system deployment nginx-ingress-controller --timeout=180s >&2
+    kubectl expose -n kube-system deployment nginx-ingress-controller --type=LoadBalancer
 }
 
 function install_certmanager() {
 
-    export KUBECONFIG="$(kind get kubeconfig-path --name="kind")"
     # Create a namespace to run cert-manager in
     kubectl create namespace cert-manager
     # Disable resource validation on the cert-manager namespace
@@ -99,8 +63,6 @@ EOF
 }
 
 function install_dex() {
-  local ING_URL=$1
-
   kubectl create namespace kube-auth
 
   cat <<EOF | kubectl apply -f -
@@ -236,7 +198,7 @@ apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
   annotations:
-    kubernetes.io/ingress.class: traefik
+    kubernetes.io/ingress.class: nginx
   labels:
     app.kubernetes.io/component: identity-service
     app.kubernetes.io/name: dex
@@ -359,29 +321,13 @@ EOF
 
 }
 
-export KIND_K8S_VERSION="${K8S_VERSION}"
-start_kind
-
-#load_image banzaicloud/vault-operator:watch-external-secrets-using-labels
-
-export KUBECONFIG="$(kind get kubeconfig-path --name="kind")"
-
-#kubectl rollout status -n kube-system daemonset kindnet --timeout=180s
-kubectl rollout status -n kube-system daemonset kube-proxy --timeout=180s
-kubectl rollout status -n kube-system deployment coredns --timeout=180s
+start_minikube
 
 echo "Installing Cert Manager"
 install_certmanager
 
 echo "Installing Ingress"
-ING_URL=$(install_ingress)
+install_ingress
 
 echo "Installing Dex"
 install_dex $ING_URL
-
-echo ""
-echo "Kind Cluster is ready"
-echo "  === "
-echo "export KUBECONFIG=\"$(kind get kubeconfig-path --name=\"kind\")\""
-echo ""
-echo "Ingress available at $ING_URL"
