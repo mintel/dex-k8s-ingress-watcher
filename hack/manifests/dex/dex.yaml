@@ -216,7 +216,7 @@ spec:
         - --incluster
         - --dex-grpc-address
         - 127.0.0.1:5557
-        image: mintel/dex-k8s-ingress-watcher:0.3.0
+        image: mintel/dex-k8s-ingress-watcher:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
