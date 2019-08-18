@@ -1,4 +1,53 @@
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/component: identity-service
+    app.kubernetes.io/name: dex
+    app.kubernetes.io/part-of: dex
+    name: dex
+  name: dex
+rules:
+- apiGroups:
+  - dex.coreos.com
+  resources:
+  - '*'
+  verbs:
+  - '*'
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - create
+- apiGroups:
+  - extensions
+  resources:
+  - ingresses
+  verbs:
+  - list
+  - watch
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/component: identity-service
+    app.kubernetes.io/name: dex
+    app.kubernetes.io/part-of: dex
+    name: dex
+  name: dex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dex
+subjects:
+- kind: ServiceAccount
+  name: dex
+  namespace: kube-auth
+---
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -21,7 +70,7 @@ spec:
     kind: ClusterIssuer
     name: global-ss-issuer
   renewBefore: 8760h
-  secretName: dex-tls
+  secretName: dex-tls-ingress
   dnsNames:
   - dex.minikube.local
 ---
@@ -69,7 +118,7 @@ data:
     staticPasswords:
     - email: "admin@minikube.local"
       # bcrypt hash of the string "password"
-      hash: "\$2a\$10\$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W"
+      hash: "$2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W"
       username: "admin"
       userID: "08a8684b-db88-4b73-90a9-3cd1661f5466"
 kind: ConfigMap
@@ -145,6 +194,7 @@ spec:
   tls:
   - hosts:
     - dex.minikube.local
+    secretName: dex-tls-ingress
 ---
 apiVersion: apps/v1
 kind: Deployment
