@@ -1,0 +1,216 @@
+---
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: Certificate
+metadata:
+  labels:
+    app.kubernetes.io/component: identity-service
+    app.kubernetes.io/name: dex
+    app.kubernetes.io/part-of: dex
+  name: dex-auth-ingress
+  namespace: kube-auth
+spec:
+  commonName: dex-auth
+  duration: 87600h
+  issuerRef:
+    name: kube-auth-ca
+  renewBefore: 8760h
+  secretName: dex-auth-ingress
+  dnsNames:
+  - dex-auth.kube-auth.svc.cluster.local
+  - auth.kube-auth.svc.cluster.local
+---
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: Certificate
+metadata:
+  labels:
+    app.kubernetes.io/component: identity-service
+    app.kubernetes.io/name: dex
+    app.kubernetes.io/part-of: dex
+  name: dex-auth-tls
+  namespace: kube-auth
+spec:
+  commonName: dex-auth
+  duration: 87600h
+  issuerRef:
+    name: kube-auth-ca
+  renewBefore: 8760h
+  secretName: dex-auth-tls
+  dnsNames:
+  - dex-auth.kube-auth.svc.cluster.local
+  - auth.kube-auth.svc.cluster.local
+---
+apiVersion: v1
+data:
+  config.yaml: |
+    clusters:
+      - name: "auth"
+        description: "A Kubernetes Cluster"
+        redirect_uri: https://auth.kube-auth.svc.cluster.local/callback/test
+        k8s_master_uri: https://kubernetes.default.svc.cluster.local
+        client_id: "auth"
+        short_description: "Cluster test"
+        client_secret: secret
+        issuer: https://dex.kube-auth.svc.cluster.local
+
+    listen: https://0.0.0.0:8443
+    tls_cert: /etc/dex-client/ssl/tls.crt
+    tls_key: /etc/dex-client/ssl/tls.key
+    trusted_root_ca_file: /etc/dex-client/ssl/ca.crt
+    idp_ca_pem_file: /etc/dex-client/ssl/ca.crt
+
+    logo_uri: https://i.pinimg.com/originals/d3/97/8a/d3978a3830404998788e8c83dfa6f476.png
+
+    kubectl_version: v1.13.9
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/component: identity-service
+    app.kubernetes.io/name: dex-auth
+    app.kubernetes.io/part-of: dex
+    name: dex-auth
+  name: dex-auth
+  namespace: kube-auth
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: identity-service
+    app.kubernetes.io/name: dex-auth
+    app.kubernetes.io/part-of: dex
+    name: dex-auth
+  name: dex-auth
+  namespace: kube-auth
+spec:
+  minReadySeconds: 30
+  progressDeadlineSeconds: 600
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: identity-service
+      app.kubernetes.io/name: dex-auth
+      app.kubernetes.io/part-of: dex
+      name: dex-auth
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: identity-service
+        app.kubernetes.io/name: dex-auth
+        app.kubernetes.io/part-of: dex
+        name: dex-auth
+    spec:
+      containers:
+      - args:
+        - --config
+        - /etc/dex-client/config.yaml
+        image: mintel/dex-k8s-authenticator:1.2.0
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          initialDelaySeconds: 5
+          tcpSocket:
+            port: 8443
+          timeoutSeconds: 3
+        name: dex-auth
+        ports:
+        - containerPort: 8443
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 150m
+            memory: 150Mi
+          requests:
+            cpu: 50m
+            memory: 50Mi
+        volumeMounts:
+        - mountPath: /etc/dex-client
+          name: config
+        - mountPath: /etc/dex-client/ssl
+          name: dex-auth-tls
+      restartPolicy: Always
+      securityContext:
+        fsGroup: 65534
+        runAsUser: 65534
+      volumes:
+      - configMap:
+          defaultMode: 420
+          items:
+          - key: config.yaml
+            path: config.yaml
+          name: dex-auth
+        name: config
+      - name: dex-auth-tls
+        secret:
+          defaultMode: 420
+          secretName: dex-auth-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: identity-service
+    app.kubernetes.io/name: dex-auth
+    app.kubernetes.io/part-of: dex
+    name: dex-auth
+  name: dex-auth
+  namespace: kube-auth
+spec:
+  ports:
+  - name: http
+    port: 443
+    protocol: TCP
+    targetPort: http
+  selector:
+    app.kubernetes.io/component: identity-service
+    app.kubernetes.io/name: dex-auth
+    app.kubernetes.io/part-of: dex
+    name: dex-auth
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+  labels:
+    app.kubernetes.io/component: identity-service
+    app.kubernetes.io/name: dex-auth
+    app.kubernetes.io/part-of: dex
+    name: dex-auth
+  name: dex-auth
+  namespace: kube-auth
+spec:
+  rules:
+  - host: dex-auth.kube-auth.svc.cluster.local
+    http:
+      paths:
+      - backend:
+          serviceName: dex-auth
+          servicePort: 443
+        path: /
+  - host: auth.kube-auth.svc.cluster.local
+    http:
+      paths:
+      - backend:
+          serviceName: dex-auth
+          servicePort: 443
+        path: /
+  tls:
+  - hosts:
+    - dex-auth.kube-auth.svc.cluster.local
+    - auth.kube-auth.svc.cluster.local
+    secretName: dex-auth-ingress

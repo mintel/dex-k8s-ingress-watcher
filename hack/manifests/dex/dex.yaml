@@ -48,10 +48,26 @@ subjects:
   name: dex
   namespace: kube-auth
 ---
-apiVersion: v1
-kind: Namespace
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: Certificate
 metadata:
-  name: kube-auth
+  labels:
+    app.kubernetes.io/component: identity-service
+    app.kubernetes.io/name: dex
+    app.kubernetes.io/part-of: dex
+  name: dex-ingress
+  namespace: kube-auth
+spec:
+  commonName: dex
+  duration: 87600h
+  issuerRef:
+    name: kube-auth-ca
+  renewBefore: 8760h
+  secretName: dex-ingress
+  dnsNames:
+  - dex.kube-auth
+  - dex.kube-auth.svc
+  - dex.kube-auth.svc.cluster.local
 ---
 apiVersion: certmanager.k8s.io/v1alpha1
 kind: Certificate
@@ -67,24 +83,27 @@ spec:
   duration: 87600h
   isCA: false
   issuerRef:
-    kind: ClusterIssuer
-    name: global-ss-issuer
+    name: kube-auth-ca
   renewBefore: 8760h
-  secretName: dex-tls-ingress
+  secretName: dex-tls
   dnsNames:
-  - dex.minikube.local
+  - dex.kube-auth
+  - dex.kube-auth.svc
+  - dex.kube-auth.svc.cluster.local
 ---
 apiVersion: v1
 data:
   config.yaml: |
-    issuer: https://dex.minikube.local
+    issuer: https://dex.kube-auth.svc.cluster.local
     storage:
       type: sqlite3
       config:
         file: /tmp/dex.db
 
     web:
-      http: 0.0.0.0:5556
+      https: 0.0.0.0:443
+      tlsCert: /etc/dex/ssl/tls.crt
+      tlsKey: /etc/dex/ssl/tls.key
 
     grpc:
       addr: 127.0.0.1:5557
@@ -92,7 +111,7 @@ data:
     frontend:
       theme: "coreos"
       issuer: "Test"
-      issuerUrl: "https://dex.minikube.local"
+      issuerUrl: "https://dex.kube-auth.svc.cluster.local"
       logoUrl: https://i.pinimg.com/originals/d3/97/8a/d3978a3830404998788e8c83dfa6f476.png
     
     telemetry:
@@ -111,12 +130,12 @@ data:
       name: "auth"
       secret: secret
       redirectURIs:
-      - https://dex-auth.minikube.local/callback/test
-      - https://auth.minikube.local/callback/test
+      - https://dex-auth.kube-auth.svc.cluster.local/callback/test
+      - https://auth.kube-auth.svc.cluster.local/callback/test
 
     enablePasswordDB: true
     staticPasswords:
-    - email: "admin@minikube.local"
+    - email: "admin@example.com"
       # bcrypt hash of the string "password"
       hash: "$2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W"
       username: "admin"
@@ -155,7 +174,7 @@ metadata:
 spec:
   ports:
   - name: http
-    port: 5556
+    port: 443
     protocol: TCP
     targetPort: http
   - name: metrics
@@ -175,6 +194,7 @@ kind: Ingress
 metadata:
   annotations:
     kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
   labels:
     app.kubernetes.io/component: identity-service
     app.kubernetes.io/name: dex
@@ -184,17 +204,17 @@ metadata:
   namespace: kube-auth
 spec:
   rules:
-  - host: dex.minikube.local
+  - host: dex.kube-auth.svc.cluster.local
     http:
       paths:
       - backend:
           serviceName: dex
-          servicePort: 5556
+          servicePort: 443
         path: /
   tls:
   - hosts:
-    - dex.minikube.local
-    secretName: dex-tls-ingress
+    - dex.kube-auth.svc.cluster.local
+    secretName: dex-ingress
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -240,11 +260,11 @@ spec:
         livenessProbe:
           initialDelaySeconds: 5
           tcpSocket:
-            port: 5556
+            port: 443
           timeoutSeconds: 3
         name: dex
         ports:
-        - containerPort: 5556
+        - containerPort: 443
           name: http
           protocol: TCP
         - containerPort: 5558
@@ -253,13 +273,15 @@ spec:
           failureThreshold: 3
           httpGet:
             path: /healthz
-            port: 5556
-            scheme: HTTP
+            port: 443
+            scheme: HTTPS
           initialDelaySeconds: 5
           periodSeconds: 10
         volumeMounts:
         - mountPath: /etc/dex/conf
           name: config
+        - mountPath: /etc/dex/ssl
+          name: dex-tls
       - command:
         - /app/bin/dex-k8s-ingress-watcher
         - serve
@@ -283,6 +305,8 @@ spec:
             port: 8080
           initialDelaySeconds: 5
           periodSeconds: 10
+      securityContext:
+        runAsUser: 0
       serviceAccount: dex
       serviceAccountName: dex
       terminationGracePeriodSeconds: 30
@@ -294,3 +318,7 @@ spec:
             path: config.yaml
           name: dex
         name: config
+      - name: dex-tls
+        secret:
+          defaultMode: 420
+          secretName: dex-tls
