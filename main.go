@@ -14,8 +14,11 @@ import (
 	"io/ioutil"
 	"k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
+	//crclient "sigs.k8s.io/controller-runtime/pkg/client"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/rest"
@@ -40,13 +43,16 @@ type DexK8sDynamicClientsApp struct {
 }
 
 const (
-	// Define annotations we check for in the Ingress annotations
-	// metadata
-	IngressAnnotationDexStaticClientId          = "mintel.com/dex-k8s-ingress-watcher-client-id"
-	IngressAnnotationDexStaticClientName        = "mintel.com/dex-k8s-ingress-watcher-client-name"
-	IngressAnnotationDexStaticClientRedirectURI = "mintel.com/dex-k8s-ingress-watcher-redirect-uri"
-	IngressAnnotationDexStaticClientSecret      = "mintel.com/dex-k8s-ingress-watcher-secret"
+	// Define annotations we check for in the watched resources
+	AnnotationDexStaticClientId          = "mintel.com/dex-k8s-ingress-watcher-client-id"
+	AnnotationDexStaticClientName        = "mintel.com/dex-k8s-ingress-watcher-client-name"
+	AnnotationDexStaticClientRedirectURI = "mintel.com/dex-k8s-ingress-watcher-redirect-uri"
+	AnnotationDexStaticClientSecret      = "mintel.com/dex-k8s-ingress-watcher-secret"
 )
+
+// Can't define a CONSTANT map
+//var configMapSecretsSelectorLabels = map[string]string{"mintel.com/dex-k8s-ingress-watcher": "enabled"}
+var configMapSecretsSelectorLabels = labels.SelectorFromSet(labels.Set(map[string]string{"mintel.com/dex-k8s-ingress-watcher": "enabled"})).String()
 
 // Return a new Dex Client to perform gRPC calls with
 func newDexClient(grpcAddress string, caPath string, clientCrtPath string, clientKeyPath string) api.DexClient {
@@ -149,30 +155,30 @@ func (c *DexK8sDynamicClientsApp) OnAdd(obj interface{}) {
 	}
 
 	log.Infof("Checking Ingress creation '%s'...", ing.Name)
-	static_client_id, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientId]
+	static_client_id, ok := ing.GetAnnotations()[AnnotationDexStaticClientId]
 	if !ok {
-		log.Infof("Ignoring Ingress '%s' - missing %s", ing.Name, IngressAnnotationDexStaticClientId)
+		log.Infof("Ignoring Ingress '%s' - missing %s", ing.Name, AnnotationDexStaticClientId)
 		return
 	}
 
-	static_client_name, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientName]
+	static_client_name, ok := ing.GetAnnotations()[AnnotationDexStaticClientName]
 
 	if !ok {
 		// Default to using the ID
 		static_client_name = static_client_id
 	}
 
-	static_client_redirect_uri, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientRedirectURI]
+	static_client_redirect_uri, ok := ing.GetAnnotations()[AnnotationDexStaticClientRedirectURI]
 
 	if !ok {
-		log.Infof("Ignoring Ingress '%s' - missing %s", ing.Name, IngressAnnotationDexStaticClientRedirectURI)
+		log.Infof("Ignoring Ingress '%s' - missing %s", ing.Name, AnnotationDexStaticClientRedirectURI)
 		return
 	}
 
-	static_client_secret, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientSecret]
+	static_client_secret, ok := ing.GetAnnotations()[AnnotationDexStaticClientSecret]
 
 	if !ok {
-		log.Infof("Ignoring Ingress '%s' - missing %s", ing.Name, IngressAnnotationDexStaticClientSecret)
+		log.Infof("Ignoring Ingress '%s' - missing %s", ing.Name, AnnotationDexStaticClientSecret)
 		return
 	}
 
@@ -196,9 +202,9 @@ func (c *DexK8sDynamicClientsApp) OnDelete(obj interface{}) {
 
 	log.Debugf("Checking Ingress deletion for '%s'...", ing.Name)
 
-	static_client_id, ok := ing.GetAnnotations()[IngressAnnotationDexStaticClientId]
+	static_client_id, ok := ing.GetAnnotations()[AnnotationDexStaticClientId]
 	if !ok {
-		log.Debugf("Ignoring Ingress '%s' - missing %s", ing.Name, IngressAnnotationDexStaticClientId)
+		log.Debugf("Ignoring Ingress '%s' - missing %s", ing.Name, AnnotationDexStaticClientId)
 		return
 	}
 
@@ -232,6 +238,20 @@ func watchIngress(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler
 	return sw
 }
 
+// Watch all configmaps in all namespaces and add event-handlers
+func watchConfigMaps(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler) cache.SharedInformer {
+  optionsModifier := func(options *metav1.ListOptions) {
+	  options.LabelSelector = configMapSecretsSelectorLabels
+	}
+
+	lw := cache.NewFilteredListWatchFromClient(client.CoreV1().RESTClient(), "configmaps", v1.NamespaceAll, optionsModifier)
+	sw := cache.NewSharedInformer(lw, new(v1.ConfigMap), 30*time.Minute)
+	for _, r := range rs {
+		sw.AddEventHandler(r)
+	}
+	return sw
+}
+
 // Helper to print errors and exit
 func exitOnError(err error) {
 	if err != nil {
@@ -258,6 +278,10 @@ func main() {
 	caCrtPath := serve.Flag("ca-crt", "CA certificate path").String()
 	clientCrtPath := serve.Flag("client-crt", "client certificate path").String()
 	clientKeyPath := serve.Flag("client-key", "client key path").String()
+
+	enableIngressController := serve.Flag("ingress-controller", "Enable the ingress controller loop").Default("true").Bool()
+	enableConfigmapController := serve.Flag("configmap-controller", "Enable the configmap controller loop").Default("false").Bool()
+	enableSecretController := serve.Flag("secret-controller", "Enable the secret controller loop").Default("false").Bool()
 
 	args := os.Args[1:]
 	switch kingpin.MustParse(app.Parse(args)) {
@@ -305,8 +329,23 @@ func main() {
 		}()
 
 		c := NewDexK8sDynamicClientsApp(dexClient)
-		w := watchIngress(client, c)
-		w.Run(nil)
-	}
+		if *enableIngressController {
+		  log.Infof("Starting Ingress controller loop")
+		  wi := watchIngress(client, c)
+			go wi.Run(nil)
+		}
 
+		if *enableConfigmapController {
+		  log.Infof("Starting Configmap controller loop")
+		  wc := watchConfigMaps(client, c)
+			go wc.Run(nil)
+	  }
+
+		if *enableSecretController {
+		  log.Infof("Starting Secret controller loop")
+	  }
+
+    // Wait forever
+		select {}
+  }
 }
