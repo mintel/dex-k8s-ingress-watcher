@@ -390,7 +390,7 @@ func watchSecrets(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler
 	}
 
 	lw := cache.NewFilteredListWatchFromClient(client.CoreV1().RESTClient(), "secrets", v1.NamespaceAll, optionsModifier)
-	sw := cache.NewSharedInformer(lw, new(v1.ConfigMap), SyncPeriodInMinutes*time.Minute)
+	sw := cache.NewSharedInformer(lw, new(v1.Secret), SyncPeriodInMinutes*time.Minute)
 	for _, r := range rs {
 		sw.AddEventHandler(r)
 	}
