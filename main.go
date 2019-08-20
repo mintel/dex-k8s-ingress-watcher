@@ -14,12 +14,12 @@ import (
 	"io/ioutil"
 	"k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/client-go/kubernetes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -55,7 +55,7 @@ const (
 	AnnotationDexStaticClientName        = "mintel.com/dex-k8s-ingress-watcher-client-name"
 	AnnotationDexStaticClientRedirectURI = "mintel.com/dex-k8s-ingress-watcher-redirect-uri"
 	AnnotationDexStaticClientSecret      = "mintel.com/dex-k8s-ingress-watcher-secret"
-	SyncPeriodInMinutes = 10
+	SyncPeriodInMinutes                  = 10
 )
 
 // Label Selector for Configmap and Secret to watch
@@ -95,7 +95,7 @@ func newDexClient(grpcAddress string, caPath string, clientCrtPath string, clien
 
 // Add Dex StaticClient via gRPC
 func addDexStaticClient(
-  c api.DexClient,
+	c api.DexClient,
 	kind string,
 	name string,
 	namespace string,
@@ -132,7 +132,7 @@ func addDexStaticClient(
 
 // Delete Dex StaticClient via gRPC
 func deleteDexStaticClient(
-  c api.DexClient,
+	c api.DexClient,
 	kind string,
 	name string,
 	namespace string,
@@ -172,7 +172,7 @@ func NewSecretClient(dexClient api.DexClient) *SecretClient {
 	}
 }
 
-func extractAnnotations( ann map[string]string) ( client_id string, client_name string, client_redirect_uri string, client_secret string, err error) {
+func extractAnnotations(ann map[string]string) (client_id string, client_name string, client_redirect_uri string, client_secret string, err error) {
 
 	static_client_id, ok := ann[AnnotationDexStaticClientId]
 	if !ok {
@@ -195,26 +195,26 @@ func extractAnnotations( ann map[string]string) ( client_id string, client_name 
 		return "", "", "", "", fmt.Errorf("missing annotation '%s'", AnnotationDexStaticClientSecret)
 	}
 
-  return static_client_id, static_client_name, static_client_redirect_uri, static_client_secret, nil
+	return static_client_id, static_client_name, static_client_redirect_uri, static_client_secret, nil
 }
 
 // Handle Client creation on Ingress event
 func (c *IngressClient) OnAdd(obj interface{}) {
 
-  kind := "Ingress"
+	kind := "Ingress"
 
 	o, ok := obj.(*v1beta1.Ingress)
 	if !ok {
-    log.Warnf("Got an unexpected, unsupported, object. Not an Ingress")
-    return
+		log.Warnf("Got an unexpected, unsupported, object. Not an Ingress")
+		return
 	}
 
 	log.Infof("Checking %s for client creation '%s' from namespace '%s' ...", kind, o.Name, o.Namespace)
 
-  static_client_id, static_client_name, static_client_redirect_uri, static_client_secret, err := extractAnnotations(o.GetAnnotations())
-  if err != nil {
-	  log.Infof("Ignoring %s '%s' from namespace '%s' - %s", kind, o.Name, o.Namespace, err)
-	  return
+	static_client_id, static_client_name, static_client_redirect_uri, static_client_secret, err := extractAnnotations(o.GetAnnotations())
+	if err != nil {
+		log.Infof("Ignoring %s '%s' from namespace '%s' - %s", kind, o.Name, o.Namespace, err)
+		return
 	}
 
 	addDexStaticClient(c.dexClient, kind, o.Name, o.Namespace, static_client_id, static_client_name, static_client_redirect_uri, static_client_secret)
@@ -228,7 +228,7 @@ func (c *IngressClient) OnUpdate(oldObj, newObj interface{}) {
 
 // Handle Ingress deletion event
 func (c *IngressClient) OnDelete(obj interface{}) {
-  kind := "Ingress"
+	kind := "Ingress"
 
 	o, ok := obj.(*v1beta1.Ingress)
 	if !ok {
@@ -249,20 +249,20 @@ func (c *IngressClient) OnDelete(obj interface{}) {
 // Handle Client creation on ConfigMap event
 func (c *ConfigMapClient) OnAdd(obj interface{}) {
 
-  kind := "ConfigMap"
+	kind := "ConfigMap"
 
 	o, ok := obj.(*v1.ConfigMap)
 	if !ok {
-    log.Warnf("Got an unexpected, unsupported, object. Not an ConfigMap")
-    return
+		log.Warnf("Got an unexpected, unsupported, object. Not an ConfigMap")
+		return
 	}
 
 	log.Infof("Checking %s for client creation '%s' from namespace '%s' ...", kind, o.Name, o.Namespace)
 
-  static_client_id, static_client_name, static_client_redirect_uri, static_client_secret, err := extractAnnotations(o.GetAnnotations())
-  if err != nil {
-	  log.Infof("Ignoring %s '%s' from namespace '%s' - %s", kind, o.Name, o.Namespace, err)
-	  return
+	static_client_id, static_client_name, static_client_redirect_uri, static_client_secret, err := extractAnnotations(o.GetAnnotations())
+	if err != nil {
+		log.Infof("Ignoring %s '%s' from namespace '%s' - %s", kind, o.Name, o.Namespace, err)
+		return
 	}
 
 	addDexStaticClient(c.dexClient, kind, o.Name, o.Namespace, static_client_id, static_client_name, static_client_redirect_uri, static_client_secret)
@@ -276,7 +276,7 @@ func (c *ConfigMapClient) OnUpdate(oldObj, newObj interface{}) {
 
 // Handle ConfigMap deletion event
 func (c *ConfigMapClient) OnDelete(obj interface{}) {
-  kind := "ConfigMap"
+	kind := "ConfigMap"
 
 	o, ok := obj.(*v1.ConfigMap)
 	if !ok {
@@ -297,20 +297,20 @@ func (c *ConfigMapClient) OnDelete(obj interface{}) {
 // Handle Client creation on Secret event
 func (c *SecretClient) OnAdd(obj interface{}) {
 
-  kind := "Secret"
+	kind := "Secret"
 
 	o, ok := obj.(*v1.Secret)
 	if !ok {
-    log.Warnf("Got an unexpected, unsupported, object. Not an Secret")
-    return
+		log.Warnf("Got an unexpected, unsupported, object. Not an Secret")
+		return
 	}
 
 	log.Infof("Checking %s for client creation '%s' from namespace '%s' ...", kind, o.Name, o.Namespace)
 
-  static_client_id, static_client_name, static_client_redirect_uri, static_client_secret, err := extractAnnotations(o.GetAnnotations())
-  if err != nil {
-	  log.Infof("Ignoring %s '%s' from namespace '%s' - %s", kind, o.Name, o.Namespace, err)
-	  return
+	static_client_id, static_client_name, static_client_redirect_uri, static_client_secret, err := extractAnnotations(o.GetAnnotations())
+	if err != nil {
+		log.Infof("Ignoring %s '%s' from namespace '%s' - %s", kind, o.Name, o.Namespace, err)
+		return
 	}
 
 	addDexStaticClient(c.dexClient, kind, o.Name, o.Namespace, static_client_id, static_client_name, static_client_redirect_uri, static_client_secret)
@@ -324,7 +324,7 @@ func (c *SecretClient) OnUpdate(oldObj, newObj interface{}) {
 
 // Handle Secret deletion event
 func (c *SecretClient) OnDelete(obj interface{}) {
-  kind := "Secret"
+	kind := "Secret"
 
 	o, ok := obj.(*v1.Secret)
 	if !ok {
@@ -371,8 +371,8 @@ func watchIngress(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler
 
 // Watch all configmaps matching label selector in all namespaces and add event-handlers
 func watchConfigMaps(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler) cache.SharedInformer {
-  optionsModifier := func(options *metav1.ListOptions) {
-	  options.LabelSelector = configMapSecretsSelectorLabels
+	optionsModifier := func(options *metav1.ListOptions) {
+		options.LabelSelector = configMapSecretsSelectorLabels
 	}
 
 	lw := cache.NewFilteredListWatchFromClient(client.CoreV1().RESTClient(), "configmaps", v1.NamespaceAll, optionsModifier)
@@ -385,8 +385,8 @@ func watchConfigMaps(client *kubernetes.Clientset, rs ...cache.ResourceEventHand
 
 // Watch all secrets matching label selector in all namespaces and add event-handlers
 func watchSecrets(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler) cache.SharedInformer {
-  optionsModifier := func(options *metav1.ListOptions) {
-	  options.LabelSelector = configMapSecretsSelectorLabels
+	optionsModifier := func(options *metav1.ListOptions) {
+		options.LabelSelector = configMapSecretsSelectorLabels
 	}
 
 	lw := cache.NewFilteredListWatchFromClient(client.CoreV1().RESTClient(), "secrets", v1.NamespaceAll, optionsModifier)
@@ -396,7 +396,6 @@ func watchSecrets(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler
 	}
 	return sw
 }
-
 
 // Helper to print errors and exit
 func exitOnError(err error) {
@@ -475,27 +474,27 @@ func main() {
 		}()
 
 		if *enableIngressController {
-		  c_ing := NewIngressClient(dexClient)
-		  log.Infof("Starting Ingress controller loop")
-		  wi := watchIngress(client, c_ing)
+			c_ing := NewIngressClient(dexClient)
+			log.Infof("Starting Ingress controller loop")
+			wi := watchIngress(client, c_ing)
 			go wi.Run(nil)
 		}
 
 		if *enableConfigmapController {
-		  c_cm := NewConfigMapClient(dexClient)
-		  log.Infof("Starting Configmap controller loop")
-		  wc := watchConfigMaps(client, c_cm)
+			c_cm := NewConfigMapClient(dexClient)
+			log.Infof("Starting Configmap controller loop")
+			wc := watchConfigMaps(client, c_cm)
 			go wc.Run(nil)
-	  }
+		}
 
 		if *enableSecretController {
-		  c_sec := NewSecretClient(dexClient)
-		  log.Infof("Starting Secret controller loop")
-		  sc := watchSecrets(client, c_sec)
+			c_sec := NewSecretClient(dexClient)
+			log.Infof("Starting Secret controller loop")
+			sc := watchSecrets(client, c_sec)
 			go sc.Run(nil)
-	  }
+		}
 
-    // Wait forever
+		// Wait forever
 		select {}
-  }
+	}
 }
