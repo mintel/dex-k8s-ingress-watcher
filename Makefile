@@ -1,7 +1,7 @@
 OUT_BIN := ./bin/dex-k8s-ingress-watcher
 
 build:
-	go build -o $(OUT_BIN) main.go
+	GO111MODULE=on go build -o $(OUT_BIN) main.go
 
 clean:
 	rm -rf $(OUT_BIN)

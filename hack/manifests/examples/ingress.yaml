@@ -1,0 +1,25 @@
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    mintel.com/dex-k8s-ingress-watcher-client-id: example-ingress
+    mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://example-ingress.kube-auth.svc.cluster.local/oauth/callback
+    mintel.com/dex-k8s-ingress-watcher-secret: example-ingress
+  labels:
+    name: example
+  name: example
+  namespace: kube-auth
+spec:
+  rules:
+  - host: example-ingress.kube-auth.svc.cluster.local
+    http:
+      paths:
+      - backend:
+          serviceName: missing-service
+          servicePort: 8080
+        path: /
+  tls:
+  - hosts:
+    - example-ingress.kube-auth.svc.cluster.local
+
