@@ -1,0 +1,55 @@
+---
+apiVersion: v1
+data:
+  config.yaml: |
+    issuer: http://dex.kube-auth.svc.cluster.local
+    storage:
+      type: kubernetes
+      config:
+        inCluster: true
+        namespace: "/dex/"
+
+    web:
+      http: 0.0.0.0:5556
+
+    grpc:
+      addr: 127.0.0.1:5557
+
+    frontend:
+      theme: "coreos"
+      issuer: "Test"
+      issuerUrl: "http://dex.kube-auth.svc.cluster.local"
+      logoUrl: https://i.pinimg.com/originals/d3/97/8a/d3978a3830404998788e8c83dfa6f476.png
+    
+    telemetry:
+      http: 0.0.0.0:5558
+
+    expiry:
+      signingKeys: "10m"
+      idTokens: "240m"
+
+    logger:
+      level: debug
+      format: json
+
+    staticClients:
+    - id: "auth"
+      name: "auth"
+      secret: secret
+      redirectURIs:
+      - http://dex-auth.kube-auth.svc.cluster.local/callback/test
+      - http://auth.kube-auth.svc.cluster.local/callback/test
+
+    enablePasswordDB: true
+    staticPasswords:
+    - email: "admin@example.com"
+      # bcrypt hash of the string "password"
+      hash: "$2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W"
+      username: "admin"
+      userID: "08a8684b-db88-4b73-90a9-3cd1661f5466"
+kind: ConfigMap
+metadata:
+  labels:
+    name: dex
+  name: dex
+  namespace: kube-auth
