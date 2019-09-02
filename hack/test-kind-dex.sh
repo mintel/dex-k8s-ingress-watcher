@@ -48,7 +48,7 @@ function test_dex() {
 }
 
 export KUBECONFIG="$(kind get kubeconfig-path --name="kind")"
-#start_dex
+start_dex
 
 sleep 5
 test_dex_early
