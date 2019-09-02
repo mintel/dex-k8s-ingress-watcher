@@ -33,6 +33,18 @@ function test_dex() {
   fi
 
   echo "Successfully retrieved expected 5 clients from dex"
+
+  kubectl -n default delete ingress example
+  kubectl -n default delete secret secret-with-annotations-and-labels
+
+  clients=$(kubectl get oauth2clients.dex.coreos.com --all-namespaces -o json | jq '.items|length')
+
+  if [[ $clients -ne 3 ]]; then
+    echo "Expecting 3 clients at this stage, got $clients instead"
+    exit 1
+  fi
+
+  echo "Successfully retrieved expected 5 clients from dex"
 }
 
 export KUBECONFIG="$(kind get kubeconfig-path --name="kind")"
