@@ -1,0 +1,25 @@
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    mintel.com/dex-k8s-ingress-watcher-client-id: ingress-default
+    mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://ingress.default.svc.cluster.local/oauth/callback
+    mintel.com/dex-k8s-ingress-watcher-secret: ingress-default
+  labels:
+    name: example
+  name: example
+  namespace: default
+spec:
+  rules:
+  - host: ingress.default.svc.cluster.local
+    http:
+      paths:
+      - backend:
+          serviceName: missing-service
+          servicePort: 8080
+        path: /
+  tls:
+  - hosts:
+    - ingress.default.svc.cluster.local
+
