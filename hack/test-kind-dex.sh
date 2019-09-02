@@ -44,11 +44,11 @@ function test_dex() {
     exit 1
   fi
 
-  echo "Successfully retrieved expected 5 clients from dex"
+  echo "Successfully retrieved expected 3 clients from dex"
 }
 
 export KUBECONFIG="$(kind get kubeconfig-path --name="kind")"
-start_dex
+#start_dex
 
 sleep 5
 test_dex_early
