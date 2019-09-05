@@ -1,4 +1,4 @@
-OUT_BIN = ./bin/dex-k8s-ingress-watcher
+OUT_BIN := ./bin/dex-k8s-ingress-watcher
 
 OS = $(shell uname)
 
@@ -22,10 +22,10 @@ clean:
 docker: ## Build Docker image
 	docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} --build-arg GOPROXY=${GOPROXY} -f Dockerfile .
 ifeq (${DOCKER_LATEST}, 1)
-  docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest
+	docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest
 endif
 ifeq (${DOCKER_LATEST_CI}, 1)
-  docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest-ci
+	docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest-ci
 endif
 
 .PHONY: run
