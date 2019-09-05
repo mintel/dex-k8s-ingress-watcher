@@ -8,7 +8,7 @@ jobs:
 
     environment:
       GO_VERSION: "1.12.9"
-      K8S_VERSION: v1.13.10
+      K8S_VERSION: v1.14.0
       KUBECONFIG: /home/circleci/.kube/config
       MINIKUBE_VERSION: v1.3.1
       MINIKUBE_WANTUPDATENOTIFICATION: false
@@ -30,8 +30,7 @@ jobs:
           name: Start minikube
           background: true
           command: |
-            sudo -E minikube start --vm-driver=none --wait=true --cpus 2 --memory 4096 --kubernetes-version=${K8S_VERSION}
-          no_output_timeout: 10m
+            sudo -E minikube start --vm-driver=none --cpus 2 --memory 4096 --kubernetes-version=${K8S_VERSION}
 
       - run:
           name: Setup kubectl
