@@ -69,6 +69,7 @@ jobs:
       - run:
           name: Wait for k8s
           command: |
+            sleep 120
             export KUBECONFIG="$(kind get kubeconfig-path --name='kind')"
             echo $KUBECONFIG
             cat $KUBECONFIG
