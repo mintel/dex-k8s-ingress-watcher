@@ -27,7 +27,7 @@ jobs:
       - run:
           name: Prepare Kind
           command: |
-            curl -Lo kind https://github.com/kubernetes-sigs/kind/releases/download/v${KIND_VERSION}/kind-linux-amd64 && chmod +x kind && sudo mv minikube /usr/local/bin/
+            curl -Lo kind https://github.com/kubernetes-sigs/kind/releases/download/v${KIND_VERSION}/kind-linux-amd64 && chmod +x kind && sudo mv kind /usr/local/bin/
             cd /usr/local/bin
             echo "${KIND_CHECKSUM}  kind" | sha256sum -c
             cat > /tmp/kind-config.yaml \<<EOF
