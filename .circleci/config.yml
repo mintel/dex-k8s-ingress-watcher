@@ -18,6 +18,7 @@ jobs:
       GOPATH: /go
       GOPROXY: https://proxy.golang.org
       DOCKER_LATEST: 1
+      DOCKER_LATEST_CI: 1
 
     steps:
       - run:
@@ -29,7 +30,7 @@ jobs:
           name: Start minikube
           background: true
           command: |
-            sudo -E minikube start --vm-driver=none --cpus 2 --memory 4096 --kubernetes-version=${K8S_VERSION}
+            sudo -E minikube start --vm-driver=none --wait=true --cpus 2 --memory 4096 --kubernetes-version=${K8S_VERSION}
 
       - run:
           name: Setup kubectl
@@ -38,46 +39,37 @@ jobs:
             mkdir -p ${HOME}/.kube
             touch ${HOME}/.kube/config
 
-      #- checkout
+      - checkout
 
-      #- run:
-      #    name: Create go directory
-      #    command: |
-      #      sudo mkdir /go
-      #      sudo chmod 777 /go
+      # XXX Go Mod download and cache modules ? 
 
-      #- run:
-      #    name: Setup golang
-      #    command: |
-      #      sudo rm -rf /usr/local/go
-      #      curl -Lo go.linux-amd64.tar.gz https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && sudo tar -C /usr/local -xzf go.linux-amd64.tar.gz && rm go.linux-amd64.tar.gz
+      - run:
+          name: Build Docker image
+          command: |
+            make docker
+          no_output_timeout: 30m
 
-      #- run:
-      #    name: Build Docker images
-      #    command: |
-      #      make docker
-      #    no_output_timeout: 30m
+      - run:
+          name: Wait for minikube
+          command: |
+            timeout 180s bash \<<EOT
+              set -o pipefail
+              function is_ready()
+              {
+                kubectl get nodes -o json \
+                  | jq '.items[].status.conditions[] | select(.type=="Ready" and .status=="True")'
+              }
 
-      #- run:
-      #    name: Wait for minikube
-      #    command: |
-      #      timeout 180s bash \<<EOT
-      #        set -o pipefail
-      #        function is_ready()
-      #        {
-      #          kubectl get nodes -o json \
-      #            | jq '.items[].status.conditions[] | select(.type=="Ready" and .status=="True")'
-      #        }
+              until is_ready
+              do
+                sleep 1
+              done
+            EOT
 
-      #        until is_ready
-      #        do
-      #          sleep 1
-      #        done
-      #      EOT
-
-      #- run:
-      #    name: Operator and webhook acceptance test
-      #    command:
+      - run:
+          name: Run Acceptance-test
+          command:
+            exit 0
       #      hack/acceptance-test.sh
 
 workflows:
