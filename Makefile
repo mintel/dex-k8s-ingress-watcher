@@ -13,6 +13,7 @@ VERSION ?= $(shell echo `git symbolic-ref -q --short HEAD || git describe --tags
 DOCKER_TAG ?= ${VERSION}
 
 build:
+	GO111MODULE=on go mod download
 	GO111MODULE=on go build -o $(OUT_BIN) main.go
 
 clean:
