@@ -30,7 +30,7 @@ jobs:
             curl -Lo kind https://github.com/kubernetes-sigs/kind/releases/download/v${KIND_VERSION}/kind-linux-amd64 && chmod +x kind && sudo mv minikube /usr/local/bin/
             cd /usr/local/bin
             echo "${KIND_CHECKSUM}  kind" | sha256sum -c
-            cat > /tmp/kind-config.yaml <<EOF
+            cat > /tmp/kind-config.yaml \<<EOF
             kind: Cluster
             apiVersion: kind.sigs.k8s.io/v1alpha3
             networking:
