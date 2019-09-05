@@ -1,4 +1,4 @@
-OUT_BIN := ./bin/dex-k8s-ingress-watcher
+OUT_BIN = ./bin/dex-k8s-ingress-watcher
 
 OS = $(shell uname)
 
