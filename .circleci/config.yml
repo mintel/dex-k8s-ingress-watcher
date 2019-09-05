@@ -60,15 +60,19 @@ jobs:
 
       # XXX Go Mod download and cache modules ? 
 
-      - run:
-          name: Build Docker image
-          command: |
-            make docker
-          no_output_timeout: 30m
+      #- run:
+      #    name: Build Docker image
+      #    command: |
+      #      make docker
+      #    no_output_timeout: 30m
 
       - run:
           name: Wait for k8s
           command: |
+            export KUBECONFIG="$(kind get kubeconfig-path --name='kind')"
+            echo $KUBECONFIG
+            cat $KUBECONFIG
+            docker ps -a
             timeout 180s bash \<<EOT
               set -o pipefail
               function is_ready()
