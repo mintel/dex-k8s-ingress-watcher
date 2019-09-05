@@ -18,10 +18,6 @@ build:
 clean:
 	rm -rf $(OUT_BIN)
 
-.PHONY: run
-run: build
-	$(OUT_BIN)
-
 .PHONY: docker
 docker: ## Build Docker image
 	docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} --build-arg GOPROXY=${GOPROXY} -f Dockerfile .
@@ -31,3 +27,8 @@ endif
 ifeq (${DOCKER_LATEST_CI}, 1)
   docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest-ci
 endif
+
+.PHONY: run
+run: build
+	$(OUT_BIN)
+
