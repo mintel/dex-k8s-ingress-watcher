@@ -8,9 +8,13 @@ DOCKER_REGISTRY ?= mintel
 DOCKER_IMAGE = ${DOCKER_REGISTRY}/dex-k8s-ingress-watcher
 
 VERSION ?= $(shell echo `git symbolic-ref -q --short HEAD || git describe --tags --exact-match` | tr '[/]' '-')
+COMMIT_HASH ?= $(shell git rev-parse --short HEAD 2>/dev/null)
+BUILD_DATE ?= $(shell date +%FT%T%z)
+LDFLAGS += -X main.version=${VERSION} -X main.commitHash=${COMMIT_HASH} -X main.buildDate=${BUILD_DATE}
 
 # Docker variables
 DOCKER_TAG ?= ${VERSION}
+GOPROXY ?= ""
 
 build:
 	GO111MODULE=on go mod download
