@@ -31,6 +31,7 @@ jobs:
           background: true
           command: |
             sudo -E minikube start --vm-driver=none --wait=true --cpus 2 --memory 4096 --kubernetes-version=${K8S_VERSION}
+          no_output_timeout: 10m
 
       - run:
           name: Setup kubectl
