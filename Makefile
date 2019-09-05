@@ -17,7 +17,6 @@ DOCKER_TAG ?= ${VERSION}
 GOPROXY ?= ""
 
 build:
-	GO111MODULE=on go mod download
 	GO111MODULE=on go build -o $(OUT_BIN) main.go
 
 clean:
