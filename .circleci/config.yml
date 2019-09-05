@@ -1,0 +1,87 @@
+version: 2.1
+
+jobs:
+  acceptance-test:
+    machine:
+      image: circleci/classic:201808-01
+      docker_layer_caching: true
+
+    environment:
+      GO_VERSION: "1.12.9"
+      K8S_VERSION: v1.13.10
+      KUBECONFIG: /home/circleci/.kube/config
+      MINIKUBE_VERSION: v1.3.1
+      MINIKUBE_WANTUPDATENOTIFICATION: false
+      MINIKUBE_WANTREPORTERRORPROMPT: false
+      MINIKUBE_HOME: /home/circleci
+      CHANGE_MINIKUBE_NONE_USER: true
+      GOPATH: /go
+      GOPROXY: https://proxy.golang.org
+      DOCKER_LATEST: 1
+
+    steps:
+      - run:
+          name: Setup minikube
+          command: |
+            curl -Lo minikube https://github.com/kubernetes/minikube/releases/download/${MINIKUBE_VERSION}/minikube-linux-amd64 && chmod +x minikube && sudo mv minikube /usr/local/bin/
+
+      - run:
+          name: Start minikube
+          background: true
+          command: |
+            sudo -E minikube start --vm-driver=none --cpus 2 --memory 4096 --kubernetes-version=${K8S_VERSION}
+
+      - run:
+          name: Setup kubectl
+          command: |
+            curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/${K8S_VERSION}/bin/linux/amd64/kubectl && chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+            mkdir -p ${HOME}/.kube
+            touch ${HOME}/.kube/config
+
+      #- checkout
+
+      #- run:
+      #    name: Create go directory
+      #    command: |
+      #      sudo mkdir /go
+      #      sudo chmod 777 /go
+
+      #- run:
+      #    name: Setup golang
+      #    command: |
+      #      sudo rm -rf /usr/local/go
+      #      curl -Lo go.linux-amd64.tar.gz https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && sudo tar -C /usr/local -xzf go.linux-amd64.tar.gz && rm go.linux-amd64.tar.gz
+
+      #- run:
+      #    name: Build Docker images
+      #    command: |
+      #      make docker
+      #    no_output_timeout: 30m
+
+      #- run:
+      #    name: Wait for minikube
+      #    command: |
+      #      timeout 180s bash \<<EOT
+      #        set -o pipefail
+      #        function is_ready()
+      #        {
+      #          kubectl get nodes -o json \
+      #            | jq '.items[].status.conditions[] | select(.type=="Ready" and .status=="True")'
+      #        }
+
+      #        until is_ready
+      #        do
+      #          sleep 1
+      #        done
+      #      EOT
+
+      #- run:
+      #    name: Operator and webhook acceptance test
+      #    command:
+      #      hack/acceptance-test.sh
+
+workflows:
+  version: 2
+  ci:
+    jobs:
+      - acceptance-test
