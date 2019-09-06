@@ -87,6 +87,7 @@ jobs:
           name: Run Acceptance-test
           command:
             hack/test-kind-dex.sh
+          no_output_timeout: 10m
 
 workflows:
   version: 2
