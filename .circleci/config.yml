@@ -86,7 +86,7 @@ jobs:
       - run:
           name: Run Acceptance-test
           command:
-            hack/acceptance-test.sh
+            hack/test-kind-dex.sh
 
 workflows:
   version: 2
