@@ -111,7 +111,6 @@ func addDexStaticClient(
 		static_client_id,
 		static_client_redirect_uri)
 
-	// redirect_uris := []string{static_client_redirect_uri}
 	redirect_uris := strings.Split(static_client_redirect_uri, ",")
 	for i := range redirect_uris {
 		redirect_uris[i] = strings.TrimSpace(redirect_uris[i])
