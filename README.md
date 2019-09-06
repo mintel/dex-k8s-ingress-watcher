@@ -85,6 +85,11 @@ staticClients:
 
 Note that `mintel.com/dex-k8s-ingress-watcher-client-name` is optional ( default to the same as _client-id_) , and the rest are required.
 
+Multiple Redirect-uris can be set using a _comma separated_ string
+```
+mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://myapp.example.com/oauth/callback,https://myapp.example.com/oauth/callbackV2
+```
+
 ## Running in Kubernetes
 
 An example deployment of DEX with the ingress watcher can be found in the [deployment directory](https://github.com/mintel/dex-k8s-ingress-watcher/blob/master/hack/deployment/)
@@ -171,9 +176,6 @@ May want to look at injecting this automatically oneday using k8s webhooks:
 
 - https://github.com/istio/istio/tree/master/pilot/pkg/kube/inject
 
-# Limitations
-
-- Does not support multiple host definitions in the Ingress, as the annotation only supports a single callback uri.
 
 # TODO
 
