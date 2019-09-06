@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 set -e
 
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
 function start_dex() {
-  kubectl apply -f ./deployment/namespace.yaml
+  kubectl apply -f ${DIR}/deployment/namespace.yaml
 
   sleep 1
-  kubectl apply -f ./deployment/
+  kubectl apply -f ${DIR}/deployment/
 
   kubectl rollout status -n kube-auth deployment dex --timeout=180s
 }
@@ -23,7 +25,7 @@ function test_dex_early() {
 
 function test_dex() {
 
-  kubectl apply -f ./examples/
+  kubectl apply -f ${DIR}/examples/
 
   clients=$(kubectl get oauth2clients.dex.coreos.com --all-namespaces -o json | jq '.items|length')
 
