@@ -10,7 +10,6 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	"strings"
 	"github.com/etherlabsio/healthcheck"
 	"io/ioutil"
 	"k8s.io/api/core/v1"
@@ -27,6 +26,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/coreos/dex/api"
@@ -114,7 +114,7 @@ func addDexStaticClient(
 	// redirect_uris := []string{static_client_redirect_uri}
 	redirect_uris := strings.Split(static_client_redirect_uri, ",")
 	for i := range redirect_uris {
-    redirect_uris[i] = strings.TrimSpace(redirect_uris[i])
+		redirect_uris[i] = strings.TrimSpace(redirect_uris[i])
 	}
 
 	req := &api.CreateClientReq{
