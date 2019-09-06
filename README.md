@@ -1,13 +1,16 @@
 # dex-k8s-ingress-watcher
 
-Monitor kubernetes ingresses and modify the `staticClients` list in a dex 
+Monitor kubernetes ingresses, configmap and Secrets to modify the `staticClients` list in a dex 
 configuration via gRPC.
 
-This is to get around the issue that Dex does not support wildcards in it's
-redirectURI option.
+When a new Resource is spotted, this application will use the annotations 
+defined in the resource to add a new `staticClient` entry in Dex.
 
-When a new Ingress is spotted, this application will use the annotations 
-defined in the Ingress to add a new `staticClient` entry in Dex.
+by default only the `Ingress watcher` is started since this is the most common pattern, optionally 
+a `configMap` and/or `secret` can be started to allow creating Dex Clients for resources outside the cluster or 
+not connected to an ingress 
+
+The use of a `secret` can also be useful if , by using `SealedSecrets` or a similar operator, you want to keep the client secret really secret
 
 ## Building
 
@@ -20,19 +23,37 @@ make build
 If run as a binary outside of cluster, should use $HOME/.kube/config, else uses
 in-cluster configuration.
 
+_default with only ingress watcher_
 ```
 ./bin/dex-k8s-ingress-watcher serve --dex-grpc-address localhost:5557                      
 ```
 
-# Ingress Configuration
+_with configmap and secret watcher_
+```
+./bin/dex-k8s-ingress-watcher serve --dex-grpc-address --ingress-controller --configmap-controller --secret-controller localhost:5557
+```
 
-`dex-k8s-ingress-watcher` monitors for the creation and deletion of Ingress events
+_disable ingress watcher_
+```
+./bin/dex-k8s-ingress-watcher serve --dex-grpc-address --no-ingress-controller --configmap-controller --secret-controller localhost:5557
+```
+
+# Resource Configuration
+
+`dex-k8s-ingress-watcher` monitors for the creation and deletion of Ingress, ConfigMap and Secrets events
 in your kubernetes cluster.
+
+* all **Ingresses** in **all-namespaces** are watched , if the required annotations are present in the resource then the _Dex client_ is created/deleted
+* **ConfigMap** and **Secrets** in **all-namespaces** are watched only if they have a **specific label** applied to them, if the required annotations are present in the resource then the _Dex client_ is created/deleted<br>
+  _mintel.com/dex-k8s-ingress-watcher: enabled_<br>
+	This is done to avoid watching a big number of secrets / configmaps where only a very small subset will be used
 
 The event-handlers check for specific annotations, which are used to pass on information
 related to the creation of `staticClient` entries in Dex via gRPC.
 
 ## Annotations
+
+Annotations are the same for every type of resource
 
 ```
 apiVersion: extensions/v1beta1
@@ -56,7 +77,7 @@ staticClients:
   - 'https://myapp.example.com/oauth/callback'
 ```
 
-Note that `mintel.com/dex-k8s-ingress-watcher-client-name` is optional, and the rest are required.
+Note that `mintel.com/dex-k8s-ingress-watcher-client-name` is optional ( default to the same as _client-id_) , and the rest are required.
 
 ## Running in Kubernetes
 
@@ -73,6 +94,9 @@ Example sidecar configuration:
     - /app/bin/dex-k8s-ingress-watcher
     - serve
     - --incluster
+    - --ingress-controller
+    - --configmap-controller
+    - --secret-controller
     - --dex-grpc-address
     - 127.0.0.1:5557
     image: mintel/dex-k8s-ingress-watcher:latest
