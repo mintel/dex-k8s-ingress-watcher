@@ -85,9 +85,10 @@ jobs:
 
       - run:
           name: Run Acceptance-test
-          command:
-            exit 0
-      #      hack/acceptance-test.sh
+          command: |
+            kind load docker-image mintel/dex-k8s-ingress-watcher:latest --loglevel debug
+            hack/test-kind-dex.sh
+          no_output_timeout: 10m
 
 workflows:
   version: 2

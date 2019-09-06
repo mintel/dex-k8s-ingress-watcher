@@ -38,6 +38,12 @@ _disable ingress watcher_
 ./bin/dex-k8s-ingress-watcher serve --dex-grpc-address --no-ingress-controller --configmap-controller --secret-controller localhost:5557
 ```
 
+### RBAC Notes
+
+The clusterrole in the [example deployment directory](https://github.com/mintel/dex-k8s-ingress-watcher/blob/master/hack/deployment/clusterrole.yaml) is configured to support all controllers _( Ingress, ConfigMaps and Secrets )_
+
+Make sure to remove the ones that you don't plan to use to limit access to those resources if not required, this is particularly true for _Secrets_
+
 # Resource Configuration
 
 `dex-k8s-ingress-watcher` monitors for the creation and deletion of Ingress, ConfigMap and Secrets events
@@ -80,6 +86,12 @@ staticClients:
 Note that `mintel.com/dex-k8s-ingress-watcher-client-name` is optional ( default to the same as _client-id_) , and the rest are required.
 
 ## Running in Kubernetes
+
+An example deployment of DEX with the ingress watcher can be found in the [deployment directory](https://github.com/mintel/dex-k8s-ingress-watcher/blob/master/hack/deployment/)
+
+**This is just an example and does not want to be production ready** 
+* It does not run DEX on SSL
+* It grants access to the serviceaccount to all configmaps and secrets on the cluster , this might not be what you want
 
 We run this application as a sidecar to Dex itself - that way it can talk over gRPC via 
 localhost.
