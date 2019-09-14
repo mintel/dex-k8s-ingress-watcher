@@ -1,16 +1,17 @@
-# dex-k8s-ingress-watcher
+# Overview
 
-Monitor kubernetes ingresses, configmap and Secrets to modify the `staticClients` list in a dex 
-configuration via gRPC.
+It's fairly common to deploy internal services in clusters which are exposed via an Ingress. They can typically be authenticated via Dex, but the process of adding new `staticClients` is a manual one.
 
-When a new Resource is spotted, this application will use the annotations 
-defined in the resource to add a new `staticClient` entry in Dex.
+This is a helper tool to automatically configure `staticClient` entries in [CoreOS Dex](https://github.com/dexidp/dex).
 
-by default only the `Ingress watcher` is started since this is the most common pattern, optionally 
-a `configMap` and/or `secret` can be started to allow creating Dex Clients for resources outside the cluster or 
-not connected to an ingress 
+It does this by running *in-cluster*, and monitoring for annotations on Ingress, ConfigMap or Secret resources.
 
-The use of a `secret` can also be useful if , by using `SealedSecrets` or a similar operator, you want to keep the client secret really secret
+The annotations on the resources define attributes of the `staticClient`, and modifications are made to Dex via gRPC.
+
+
+By default only the `Ingress` resources are watched - this is the most common pattern. Optionally `ConfigMap` and/or `Secret` resources can be monitored.
+
+The use of a `Secret` can also be useful since you can keep the `staticClient` `client-secret` truely secret, at least if you are using something like [SealedSecrets](https://github.com/bitnami-labs/sealed-secrets).
 
 ## Building
 
@@ -20,8 +21,11 @@ make build
 
 ## Running
 
-If run as a binary outside of cluster, should use $HOME/.kube/config, else uses
-in-cluster configuration.
+The application supports being run in, and out of cluster.
+
+If run outside of a cluster, it will look for `$HOME/.kube/config`
+
+### Examples
 
 _default with only ingress watcher_
 ```
@@ -92,18 +96,17 @@ mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://myapp.example.com/oauth
 
 ## Running in Kubernetes
 
-An example deployment of DEX with the ingress watcher can be found in the [deployment directory](https://github.com/mintel/dex-k8s-ingress-watcher/blob/master/hack/deployment/)
+Example manifests can be found in the [deployment directory](https://github.com/mintel/dex-k8s-ingress-watcher/blob/master/hack/deployment/).
 
-**This is just an example and does not want to be production ready** 
-* It does not run DEX on SSL
-* It grants access to the serviceaccount to all configmaps and secrets on the cluster , this might not be what you want
+**These are not production ready**
+* They do not run Dex on SSL
+* They grant access to the serviceaccount to all configmaps and secrets on the cluster (this may not be what you want).
 
-We run this application as a sidecar to Dex itself - that way it can talk over gRPC via 
-localhost.
+We run this application as a sidecar to Dex itself - that way it can talk over gRPC via localhost.
 
 In this example, Dex is running on `127.0.0.1` with gRPC exposed on port `5557`.
 
-Example sidecar configuration:
+### Example sidecar configuration:
 
 ```
   - name: dex-k8s-ingress-watcher
@@ -179,6 +182,4 @@ May want to look at injecting this automatically oneday using k8s webhooks:
 
 # TODO
 
-- Tidy up structure of code
-- Test TLS support
-- Set --verbose mode 
+- This should really be a CRD.
