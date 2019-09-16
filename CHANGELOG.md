@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [v0.4.0]
+
+### Added
+
+- Added options to monitor configmap and secret resources to determine staticClients.
+
 ## [v0.3.1]
 
 ### Fixed 
