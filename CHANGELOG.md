@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Added options to monitor configmap and secret resources to determine staticClients.
+- Support Multiple redirection URLs on a single staticClient.
 
 ## [v0.3.1]
 
