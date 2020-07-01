@@ -99,7 +99,6 @@ function test_dex() {
   echo "Successfully retrieved expected 1 uris from dex for client 'nfxgo4tfonzs223vmjss2ylvorumx4u44scceizf'"
 }
 
-export KUBECONFIG="$(kind get kubeconfig-path --name="kind")"
 start_dex
 
 sleep 5

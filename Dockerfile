@@ -1,7 +1,7 @@
-FROM golang:1.12-alpine3.10
+FROM golang:1.12-alpine3.11 as build
 
-
-RUN apk add --no-cache --update alpine-sdk bash
+RUN apk add --no-cache --update alpine-sdk=1.0-r0 \
+                                bash=5.0.11-r1
 
 ENV GO111MODULE=on
 
@@ -16,14 +16,16 @@ COPY . .
 
 RUN make build
 
-FROM alpine:3.10.1
+FROM alpine:3.11
 
-RUN apk add --update ca-certificates openssl curl && \
+RUN apk add --no-cache --update ca-certificates=20191127-r2 \
+                                openssl=1.1.1g-r0 \
+                                curl=7.67.0-r0 && \
     addgroup -g 1000 -S mintel && \
     adduser -u 1000 -S mintel -G mintel
 
 RUN mkdir -p /app/bin
-COPY --from=0 /app/bin/dex-k8s-ingress-watcher /app/bin/
+COPY --from=build /app/bin/dex-k8s-ingress-watcher /app/bin/
 
 # Add any required certs/key by mounting a volume on /certs
 # The entrypoint will copy them and run update-ca-certificates at startup
