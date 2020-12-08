@@ -3,9 +3,9 @@ apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
   annotations:
-    mintel.com/dex-k8s-ingress-watcher-client-id: ingress-default
-    mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://ingress.default.svc.cluster.local/oauth/callback
-    mintel.com/dex-k8s-ingress-watcher-secret: ingress-default
+    app.mintel.com/dex-k8s-ingress-watcher-client-id: ingress-default
+    app.mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://ingress.default.svc.cluster.local/oauth/callback
+    app.mintel.com/dex-k8s-ingress-watcher-secret: ingress-default
   labels:
     name: example
   name: example

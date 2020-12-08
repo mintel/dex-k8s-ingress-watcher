@@ -52,16 +52,16 @@ type SecretClient struct {
 
 const (
 	// Define annotations we check for in the watched resources
-	AnnotationDexStaticClientId          = "mintel.com/dex-k8s-ingress-watcher-client-id"
-	AnnotationDexStaticClientName        = "mintel.com/dex-k8s-ingress-watcher-client-name"
-	AnnotationDexStaticClientRedirectURI = "mintel.com/dex-k8s-ingress-watcher-redirect-uri"
-	AnnotationDexStaticClientSecret      = "mintel.com/dex-k8s-ingress-watcher-secret"
+	AnnotationDexStaticClientId          = "app.mintel.com/dex-k8s-ingress-watcher-client-id"
+	AnnotationDexStaticClientName        = "app.mintel.com/dex-k8s-ingress-watcher-client-name"
+	AnnotationDexStaticClientRedirectURI = "app.mintel.com/dex-k8s-ingress-watcher-redirect-uri"
+	AnnotationDexStaticClientSecret      = "app.mintel.com/dex-k8s-ingress-watcher-secret"
 	SyncPeriodInMinutes                  = 10
 )
 
 // Label Selector for Configmap and Secret to watch
 // Can't define a CONSTANT map
-var configMapSecretsSelectorLabels = labels.SelectorFromSet(labels.Set(map[string]string{"mintel.com/dex-k8s-ingress-watcher": "enabled"})).String()
+var configMapSecretsSelectorLabels = labels.SelectorFromSet(labels.Set(map[string]string{"app.mintel.com/dex-k8s-ingress-watcher": "enabled"})).String()
 
 // Return a new Dex Client to perform gRPC calls with
 func newDexClient(grpcAddress string, caPath string, clientCrtPath string, clientKeyPath string) api.DexClient {

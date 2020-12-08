@@ -55,7 +55,7 @@ in your kubernetes cluster.
 
 * all **Ingresses** in **all-namespaces** are watched , if the required annotations are present in the resource then the _Dex client_ is created/deleted
 * **ConfigMap** and **Secrets** in **all-namespaces** are watched only if they have a **specific label** applied to them, if the required annotations are present in the resource then the _Dex client_ is created/deleted<br>
-  _mintel.com/dex-k8s-ingress-watcher: enabled_<br>
+  _app.mintel.com/dex-k8s-ingress-watcher: enabled_<br>
 	This is done to avoid watching a big number of secrets / configmaps where only a very small subset will be used
 
 The event-handlers check for specific annotations, which are used to pass on information
@@ -70,10 +70,10 @@ apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
   annotations:
-    mintel.com/dex-k8s-ingress-watcher-client-id: my-app
-    mintel.com/dex-k8s-ingress-watcher-client-name: My Application
-    mintel.com/dex-k8s-ingress-watcher-secret: a-secret
-    mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://myapp.example.com/oauth/callback
+    app.mintel.com/dex-k8s-ingress-watcher-client-id: my-app
+    app.mintel.com/dex-k8s-ingress-watcher-client-name: My Application
+    app.mintel.com/dex-k8s-ingress-watcher-secret: a-secret
+    app.mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://myapp.example.com/oauth/callback
 ```
 
 Such an annotation would generate in Dex the following `staticClient`
@@ -87,11 +87,11 @@ staticClients:
   - 'https://myapp.example.com/oauth/callback'
 ```
 
-Note that `mintel.com/dex-k8s-ingress-watcher-client-name` is optional ( default to the same as _client-id_) , and the rest are required.
+Note that `app.mintel.com/dex-k8s-ingress-watcher-client-name` is optional ( default to the same as _client-id_) , and the rest are required.
 
 Multiple Redirect-uris can be set using a _comma separated_ string
 ```
-mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://myapp.example.com/oauth/callback,https://myapp.example.com/oauth/callbackV2
+app.mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://myapp.example.com/oauth/callback,https://myapp.example.com/oauth/callbackV2
 ```
 
 ## Running in Kubernetes
@@ -171,8 +171,8 @@ Example sidecar configuration:
 Key points to note:
 - Your Ingress and Service must point at the keycloak proxy port, i.e `3000` in this example
 - Proxy has an `upstream-url` which is the application you want to product (running on same host, different port)
-- `client-secret` must match the `mintel.com/dex-k8s-ingress-watcher-secret` annotation
-- `client-id` must match the `mintel.com/dex-k8s-ingress-watcher-client-id` annotation
+- `client-secret` must match the `app.mintel.com/dex-k8s-ingress-watcher-secret` annotation
+- `client-id` must match the `app.mintel.com/dex-k8s-ingress-watcher-client-id` annotation
 - `keycloak` lets you protect by `resources=uri` option, restricting by groups returned by Dex if required
 
 May want to look at injecting this automatically oneday using k8s webhooks:
