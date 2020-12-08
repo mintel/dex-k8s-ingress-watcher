@@ -1,9 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## [v0.4.0]
+## [v0.5.0]
 
-[View changes in this tag.](https://github.com/mintel/dex-k8s-ingress-watcher/compare/v0.3.1...v0.4.0)
+### Added
+
+- Rename annotation namespace from `mintel.com` to `app.mintel.com`
+
+## [v0.4.0]
 
 ### Added
 
