@@ -4,8 +4,8 @@ metadata:
   name: cm-with-annotations-and-labels
   namespace: kube-auth
   annotations:
-    mintel.com/dex-k8s-ingress-watcher-client-id: cm-kube-auth
-    mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://cm.kube-auth.svc.cluster.local/oauth/callback
-    mintel.com/dex-k8s-ingress-watcher-secret: cm-kube-auth
+    app.mintel.com/dex-k8s-ingress-watcher-client-id: cm-kube-auth
+    app.mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://cm.kube-auth.svc.cluster.local/oauth/callback
+    app.mintel.com/dex-k8s-ingress-watcher-secret: cm-kube-auth
   labels:
-    mintel.com/dex-k8s-ingress-watcher: enabled
+    app.mintel.com/dex-k8s-ingress-watcher: enabled

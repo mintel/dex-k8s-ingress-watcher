@@ -3,9 +3,9 @@ apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
   annotations:
-    mintel.com/dex-k8s-ingress-watcher-client-id: ingress-kube-auth-multi-uri
-    mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://ingress.kube-auth.svc.cluster.local/oauth/callback,https://ingress.kube-auth.svc.cluster.local/oauth/callbackV2
-    mintel.com/dex-k8s-ingress-watcher-secret: ingress-kube-auth-multi-uri
+    app.mintel.com/dex-k8s-ingress-watcher-client-id: ingress-kube-auth-multi-uri
+    app.mintel.com/dex-k8s-ingress-watcher-redirect-uri: https://ingress.kube-auth.svc.cluster.local/oauth/callback,https://ingress.kube-auth.svc.cluster.local/oauth/callbackV2
+    app.mintel.com/dex-k8s-ingress-watcher-secret: ingress-kube-auth-multi-uri
   labels:
     name: example-multi-uri
   name: example-multi-uri

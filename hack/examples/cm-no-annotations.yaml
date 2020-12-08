@@ -4,4 +4,4 @@ metadata:
   name: cm-no-annotations
   namespace: kube-auth
   labels:
-    mintel.com/dex-k8s-ingress-watcher: enabled
+    app.mintel.com/dex-k8s-ingress-watcher: enabled
