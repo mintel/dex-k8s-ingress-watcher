@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -ex
 
 command -v kind >/dev/null 2>/dev/null
 if [ $? -ne 0 ]; then 
@@ -7,13 +7,13 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-kind version | egrep "^v0.5" >/dev/null 2>/dev/null
+kind version | egrep "^kind v0.12" >/dev/null 2>/dev/null
 if [ $? -ne 0 ]; then 
-  echo "Need kind version 0.5.x" 
+  echo "Need kind version 0.12.x" 
   exit 1
 fi
 
-K8S_VERSION="${K8S_VERSION:-v1.13.10@sha256:2f5f882a6d0527a2284d29042f3a6a07402e1699d792d0d5a9b9a48ef155fa2a}"
+K8S_VERSION="${K8S_VERSION:-v1.22.7@sha256:c195c17f2a9f6ad5bbddc9eb8bad68fa21709162aabf2b84e4a3896db05c0808}"
 K8S_WORKERS="${K8S_WORKERS:-2}"
 
 unset KUBECONFIG
@@ -21,7 +21,7 @@ unset KUBECONFIG
 function start_kind() {
     cat > /tmp/kind-config.yaml <<EOF
 kind: Cluster
-apiVersion: kind.sigs.k8s.io/v1alpha3
+apiVersion: kind.x-k8s.io/v1alpha4
 networking:
   apiServerAddress: 0.0.0.0
 nodes:
@@ -43,7 +43,8 @@ done
 export KIND_K8S_VERSION="${K8S_VERSION}"
 start_kind
 
-export KUBECONFIG="$(kind get kubeconfig-path --name="kind")"
+export KUBECONFIG="$(mktemp)"
+kind get kubeconfig --name="kind" > $KUBECONFIG
 
 kubectl rollout status -n kube-system daemonset kindnet --timeout=180s
 kubectl rollout status -n kube-system daemonset kube-proxy --timeout=180s

@@ -10,6 +10,6 @@ roleRef:
   kind: ClusterRole
   name: dex
 subjects:
-- kind: ServiceAccount
-  name: dex
-  namespace: kube-auth
+  - kind: ServiceAccount
+    name: dex
+    namespace: kube-auth

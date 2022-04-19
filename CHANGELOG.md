@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [v0.5.0]
+
+[View changes in this tag.](https://github.com/mintel/dex-k8s-ingress-watcher/compare/v0.4.0...v0.5.0)
+
+### Changed
+
+- Watch networking/v1 Ingresses only by default.
+- Update Go version to 1.17.
+
 ## [v0.4.0]
 
 [View changes in this tag.](https://github.com/mintel/dex-k8s-ingress-watcher/compare/v0.3.1...v0.4.0)

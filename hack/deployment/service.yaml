@@ -8,14 +8,14 @@ metadata:
   namespace: kube-auth
 spec:
   ports:
-  - name: http
-    port: 5556
-    protocol: TCP
-    targetPort: http
-  - name: metrics
-    port: 5558
-    protocol: TCP
-    targetPort: metrics
+    - name: http
+      port: 5556
+      protocol: TCP
+      targetPort: http
+    - name: metrics
+      port: 5558
+      protocol: TCP
+      targetPort: metrics
   selector:
     app.kubernetes.io/part-of: dex
     name: dex
