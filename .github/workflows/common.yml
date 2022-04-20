@@ -9,7 +9,7 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
-  fmt:
+  lint:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
@@ -17,12 +17,13 @@ jobs:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v2
 
-    - name: Gofmter
-      uses: Jerome1337/gofmt-action@v1.0.2
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v3
       with:
-        gofmt-path: ./
+        # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
+        version: latest
 
-    - name: Hadolint Action
-      uses: brpaz/hadolint-action@v1.1.0
+    - name: hadolint
+      uses: hadolint/hadolint-action@v2.0.0
       with:
         dockerfile: Dockerfile

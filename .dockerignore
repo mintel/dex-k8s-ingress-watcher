@@ -1,3 +1,9 @@
-charts
-examples
-hack
+# Ignore everything
+**
+
+# Allow files and directories
+!/main.go
+!/go.mod
+!/go.sum
+!/entrypoint.sh
+!/vendor

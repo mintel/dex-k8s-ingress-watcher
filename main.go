@@ -8,12 +8,27 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"flag"
 	"fmt"
-	"github.com/etherlabsio/healthcheck"
 	"io/ioutil"
-	"k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/alecthomas/kong"
+	"github.com/coreos/dex/api"
+	"github.com/etherlabsio/healthcheck"
+	log "github.com/sirupsen/logrus"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+
+	v1 "k8s.io/api/core/v1"
+	extv1beta1 "k8s.io/api/extensions/v1beta1"
+	netv1 "k8s.io/api/networking/v1"
+	netv1beta1 "k8s.io/api/networking/v1beta1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -23,18 +38,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
-
-	"github.com/coreos/dex/api"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-
-	log "github.com/sirupsen/logrus"
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
 // App struct, one per time to use as resource handlers
@@ -71,7 +74,7 @@ func newDexClient(grpcAddress string, caPath string, clientCrtPath string, clien
 		caCert, err := ioutil.ReadFile(caPath)
 		exitOnError(err)
 
-		if cPool.AppendCertsFromPEM(caCert) != true {
+		if !cPool.AppendCertsFromPEM(caCert) {
 			log.Errorf("failed to parse CA crt")
 		}
 
@@ -87,7 +90,7 @@ func newDexClient(grpcAddress string, caPath string, clientCrtPath string, clien
 		exitOnError(err)
 		return api.NewDexClient(conn)
 	} else {
-		conn, err := grpc.Dial(grpcAddress, grpc.WithInsecure())
+		conn, err := grpc.Dial(grpcAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		exitOnError(err)
 		return api.NewDexClient(conn)
 	}
@@ -135,12 +138,7 @@ func addDexStaticClient(
 }
 
 // Delete Dex StaticClient via gRPC
-func deleteDexStaticClient(
-	c api.DexClient,
-	kind string,
-	name string,
-	namespace string,
-	static_client_id string) {
+func deleteDexStaticClient(c api.DexClient, kind string, name string, namespace string, static_client_id string) {
 
 	log.Infof("Deleting %s '%s' with static client '%s'", kind, name, static_client_id)
 
@@ -151,7 +149,7 @@ func deleteDexStaticClient(
 	resp, err := c.DeleteClient(context.TODO(), req)
 	exitOnError(err)
 	if resp.NotFound {
-		log.Errorf("Dex gPRC: client '%s' could not be deleted for %s '%s' from namespace '%s' - not found '%s'", static_client_id, kind, name, namespace)
+		log.Errorf("Dex gPRC: client '%s' could not be deleted for %s '%s' from namespace '%s' - not found", static_client_id, kind, name, namespace)
 	} else {
 		log.Infof("Dex gRPC: Successfully deleted client for %s '%s' from namespace '%s'", kind, name, namespace)
 	}
@@ -205,23 +203,38 @@ func extractAnnotations(ann map[string]string) (client_id string, client_name st
 // Handle Client creation on Ingress event
 func (c *IngressClient) OnAdd(obj interface{}) {
 
-	kind := "Ingress"
+	const kind = "Ingress"
 
-	o, ok := obj.(*v1beta1.Ingress)
-	if !ok {
+	var (
+		name                       string
+		namespace                  string
+		static_client_id           string
+		static_client_name         string
+		static_client_redirect_uri string
+		static_client_secret       string
+		err                        error
+	)
+	switch o := obj.(type) {
+	case *extv1beta1.Ingress:
+		name, namespace = o.Name, o.Namespace
+		static_client_id, static_client_name, static_client_redirect_uri, static_client_secret, err = extractAnnotations(o.GetAnnotations())
+	case *netv1beta1.Ingress:
+		name, namespace = o.Name, o.Namespace
+		static_client_id, static_client_name, static_client_redirect_uri, static_client_secret, err = extractAnnotations(o.GetAnnotations())
+	case *netv1.Ingress:
+		name, namespace = o.Name, o.Namespace
+		static_client_id, static_client_name, static_client_redirect_uri, static_client_secret, err = extractAnnotations(o.GetAnnotations())
+	default:
 		log.Warnf("Got an unexpected, unsupported, object. Not an Ingress")
 		return
 	}
-
-	log.Infof("Checking %s for client creation '%s' from namespace '%s' ...", kind, o.Name, o.Namespace)
-
-	static_client_id, static_client_name, static_client_redirect_uri, static_client_secret, err := extractAnnotations(o.GetAnnotations())
 	if err != nil {
-		log.Infof("Ignoring %s '%s' from namespace '%s' - %s", kind, o.Name, o.Namespace, err)
+		log.Infof("Ignoring %s '%s' from namespace '%s' - %s", kind, name, namespace, err)
 		return
 	}
+	log.Infof("Checking %s for client creation '%s' from namespace '%s' ...", kind, name, namespace)
 
-	addDexStaticClient(c.dexClient, kind, o.Name, o.Namespace, static_client_id, static_client_name, static_client_redirect_uri, static_client_secret)
+	addDexStaticClient(c.dexClient, kind, name, namespace, static_client_id, static_client_name, static_client_redirect_uri, static_client_secret)
 }
 
 // Handle Ingress update event
@@ -232,28 +245,41 @@ func (c *IngressClient) OnUpdate(oldObj, newObj interface{}) {
 
 // Handle Ingress deletion event
 func (c *IngressClient) OnDelete(obj interface{}) {
-	kind := "Ingress"
+	const kind = "Ingress"
 
-	o, ok := obj.(*v1beta1.Ingress)
+	var (
+		name             string
+		namespace        string
+		static_client_id string
+		ok               bool
+	)
+	switch o := obj.(type) {
+	case *extv1beta1.Ingress:
+		name, namespace = o.Name, o.Namespace
+		static_client_id, ok = o.GetAnnotations()[AnnotationDexStaticClientId]
+	case *netv1beta1.Ingress:
+		name, namespace = o.Name, o.Namespace
+		static_client_id, ok = o.GetAnnotations()[AnnotationDexStaticClientId]
+	case *netv1.Ingress:
+		name, namespace = o.Name, o.Namespace
+		static_client_id, ok = o.GetAnnotations()[AnnotationDexStaticClientId]
+	default:
+		log.Warnf("Got an unexpected, unsupported, object. Not an Ingress")
+		return
+	}
+	log.Debugf("Checking %s for client deletion for '%s' from namespace '%s' ...", kind, name, namespace)
 	if !ok {
+		log.Debugf("Ignoring %s '%s' from namespace '%s' - missing %s", kind, name, namespace, AnnotationDexStaticClientId)
 		return
 	}
 
-	log.Debugf("Checking %s for client deletion for '%s' from namespace '%s' ...", kind, o.Name, o.Namespace)
-
-	static_client_id, ok := o.GetAnnotations()[AnnotationDexStaticClientId]
-	if !ok {
-		log.Debugf("Ignoring %s '%s' from namespace '%s' - missing %s", kind, o.Name, o.Namespace, AnnotationDexStaticClientId)
-		return
-	}
-
-	deleteDexStaticClient(c.dexClient, kind, o.Name, o.Namespace, static_client_id)
+	deleteDexStaticClient(c.dexClient, kind, name, namespace, static_client_id)
 }
 
 // Handle Client creation on ConfigMap event
 func (c *ConfigMapClient) OnAdd(obj interface{}) {
 
-	kind := "ConfigMap"
+	const kind = "ConfigMap"
 
 	o, ok := obj.(*v1.ConfigMap)
 	if !ok {
@@ -280,7 +306,7 @@ func (c *ConfigMapClient) OnUpdate(oldObj, newObj interface{}) {
 
 // Handle ConfigMap deletion event
 func (c *ConfigMapClient) OnDelete(obj interface{}) {
-	kind := "ConfigMap"
+	const kind = "ConfigMap"
 
 	o, ok := obj.(*v1.ConfigMap)
 	if !ok {
@@ -301,7 +327,7 @@ func (c *ConfigMapClient) OnDelete(obj interface{}) {
 // Handle Client creation on Secret event
 func (c *SecretClient) OnAdd(obj interface{}) {
 
-	kind := "Secret"
+	const kind = "Secret"
 
 	o, ok := obj.(*v1.Secret)
 	if !ok {
@@ -328,7 +354,7 @@ func (c *SecretClient) OnUpdate(oldObj, newObj interface{}) {
 
 // Handle Secret deletion event
 func (c *SecretClient) OnDelete(obj interface{}) {
-	kind := "Secret"
+	const kind = "Secret"
 
 	o, ok := obj.(*v1.Secret)
 	if !ok {
@@ -363,10 +389,30 @@ func newClient(kubeconfig string, inCluster bool) *kubernetes.Clientset {
 	return client
 }
 
-// Watch all ingresses in all namespaces and add event-handlers
-func watchIngress(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler) cache.SharedInformer {
+// Watch all extensions/v1beta1 Ingresses in all namespaces and add event-handlers
+func watchExtensionsV1Beta1Ingress(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler) cache.SharedInformer {
 	lw := cache.NewListWatchFromClient(client.ExtensionsV1beta1().RESTClient(), "ingresses", v1.NamespaceAll, fields.Everything())
-	sw := cache.NewSharedInformer(lw, new(v1beta1.Ingress), SyncPeriodInMinutes*time.Minute)
+	sw := cache.NewSharedInformer(lw, new(extv1beta1.Ingress), SyncPeriodInMinutes*time.Minute)
+	for _, r := range rs {
+		sw.AddEventHandler(r)
+	}
+	return sw
+}
+
+// Watch all networking/v1beta1 Ingresses in all namespaces and add event-handlers
+func watchNetworkingV1Beta1Ingress(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler) cache.SharedInformer {
+	lw := cache.NewListWatchFromClient(client.NetworkingV1beta1().RESTClient(), "ingresses", v1.NamespaceAll, fields.Everything())
+	sw := cache.NewSharedInformer(lw, new(netv1beta1.Ingress), SyncPeriodInMinutes*time.Minute)
+	for _, r := range rs {
+		sw.AddEventHandler(r)
+	}
+	return sw
+}
+
+// Watch all networking/v1 Ingresses in all namespaces and add event-handlers
+func watchNetworkingV1Ingress(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler) cache.SharedInformer {
+	lw := cache.NewListWatchFromClient(client.NetworkingV1().RESTClient(), "ingresses", v1.NamespaceAll, fields.Everything())
+	sw := cache.NewSharedInformer(lw, new(netv1.Ingress), SyncPeriodInMinutes*time.Minute)
 	for _, r := range rs {
 		sw.AddEventHandler(r)
 	}
@@ -404,49 +450,49 @@ func watchSecrets(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler
 // Helper to print errors and exit
 func exitOnError(err error) {
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 }
 
-func init() {
-	flag.Parse()
+// CLI flags
+var CLI struct {
+	Serve struct {
+		InCluster      bool   `name:"incluster" help:"use in cluster configuration."`
+		KubeConfig     string `name:"kubeconfig" type:"path" default:"~/.kube/config" help:"path to kubeconfig (if not in running inside a cluster)"`
+		DexGrpcService string `name:"dex-grpc-address" default:"127.0.0.1:5557" help:"dex grpc address"`
+		LogJson        bool   `name:"log-json" help:"set log formatter to json"`
+
+		CACrtPath     string `name:"ca-crt" type:"path" help:"CA certificate path"`
+		ClientCrtPath string `name:"client-crt" type:"path" help:"client certificate path"`
+		ClientKeyPath string `name:"client-key" type:"path" help:"client key path"`
+
+		EnableIngressController   bool `name:"ingress-controller" negatable:"" default:"true" help:"Enable the controller loop for ingresses"`
+		EnableConfigmapController bool `name:"configmap-controller" negatable:"" default:"false" help:"Enable the configmap controller loop"`
+		EnableSecretController    bool `name:"secret-controller" negatable:"" default:"false" help:"Enable the secret controller loop"`
+	} `cmd:"serve" help:"Run it"`
 }
 
 // Define usage and start the app
 func main() {
-	// Initialize logger.
-	app := kingpin.New("app", "Create Dex client based of Ingress")
-
-	serve := app.Command("serve", "Run it")
-	inCluster := serve.Flag("incluster", "use in cluster configuration.").Bool()
-	kubeconfig := serve.Flag("kubeconfig", "path to kubeconfig (if not in running inside a cluster)").Default(filepath.Join(os.Getenv("HOME"), ".kube", "config")).String()
-	dexGrpcService := serve.Flag("dex-grpc-address", "dex grpc address").Default("127.0.0.1:5557").String()
-	logJson := serve.Flag("log-json", "set log formatter to json").Bool()
-
-	caCrtPath := serve.Flag("ca-crt", "CA certificate path").String()
-	clientCrtPath := serve.Flag("client-crt", "client certificate path").String()
-	clientKeyPath := serve.Flag("client-key", "client key path").String()
-
-	enableIngressController := serve.Flag("ingress-controller", "Enable the ingress controller loop").Default("true").Bool()
-	enableConfigmapController := serve.Flag("configmap-controller", "Enable the configmap controller loop").Default("false").Bool()
-	enableSecretController := serve.Flag("secret-controller", "Enable the secret controller loop").Default("false").Bool()
+	ctx := kong.Parse(&CLI)
 
 	args := os.Args[1:]
-	switch kingpin.MustParse(app.Parse(args)) {
+	switch ctx.Command() {
 	default:
-		app.Usage(args)
+		if err := ctx.PrintUsage(true); err != nil {
+			panic(err)
+		}
 		os.Exit(2)
-	case serve.FullCommand():
+	case "serve":
 
 		log.Infof("args: %v", args)
 
-		if *logJson {
+		if CLI.Serve.LogJson {
 			log.SetFormatter(&log.JSONFormatter{})
 		}
 
-		client := newClient(*kubeconfig, *inCluster)
-		dexClient := newDexClient(*dexGrpcService, *caCrtPath, *clientCrtPath, *clientKeyPath)
+		client := newClient(CLI.Serve.KubeConfig, CLI.Serve.InCluster)
+		dexClient := newDexClient(CLI.Serve.DexGrpcService, CLI.Serve.CACrtPath, CLI.Serve.ClientCrtPath, CLI.Serve.ClientKeyPath)
 
 		r := http.NewServeMux()
 		r.Handle("/healthz", healthcheck.Handler(
@@ -459,7 +505,6 @@ func main() {
 				),
 			),
 		))
-
 		r.Handle("/readiness", healthcheck.Handler(
 			healthcheck.WithChecker(
 				"dex-grpc", healthcheck.CheckerFunc(
@@ -474,26 +519,62 @@ func main() {
 		))
 
 		go func() {
-			http.ListenAndServe(":8080", r)
+			exitOnError(http.ListenAndServe(":8080", r))
 		}()
 
-		if *enableIngressController {
+		if CLI.Serve.EnableIngressController {
 			c_ing := NewIngressClient(dexClient)
-			log.Infof("Starting Ingress controller loop")
-			wi := watchIngress(client, c_ing)
-			go wi.Run(nil)
+
+			group, err := client.ServerResourcesForGroupVersion("networking.k8s.io/v1")
+			if !errors.IsNotFound(err) {
+				exitOnError(err)
+				for _, resource := range group.APIResources {
+					if resource.Kind == "Ingress" {
+						log.Infof("Starting controller loop for networking/v1 Ingress")
+						wi := watchNetworkingV1Ingress(client, c_ing)
+						go wi.Run(nil)
+						break
+					}
+				}
+			}
+
+			group, err = client.ServerResourcesForGroupVersion("networking.k8s.io/v1beta")
+			if !errors.IsNotFound(err) {
+				exitOnError(err)
+				for _, resource := range group.APIResources {
+					if resource.Kind == "Ingress" {
+						log.Infof("Starting controller loop for networking/v1beta1 Ingress")
+						wi := watchNetworkingV1Beta1Ingress(client, c_ing)
+						go wi.Run(nil)
+						break
+					}
+				}
+			}
+
+			group, err = client.ServerResourcesForGroupVersion("extensions/v1beta1")
+			if !errors.IsNotFound(err) {
+				exitOnError(err)
+				for _, resource := range group.APIResources {
+					if resource.Kind == "Ingress" {
+						log.Infof("Starting controller loop for  Ingress")
+						wi := watchExtensionsV1Beta1Ingress(client, c_ing)
+						go wi.Run(nil)
+						break
+					}
+				}
+			}
 		}
 
-		if *enableConfigmapController {
+		if CLI.Serve.EnableConfigmapController {
 			c_cm := NewConfigMapClient(dexClient)
-			log.Infof("Starting Configmap controller loop")
+			log.Infof("Starting controller loop for ConfigMap")
 			wc := watchConfigMaps(client, c_cm)
 			go wc.Run(nil)
 		}
 
-		if *enableSecretController {
+		if CLI.Serve.EnableSecretController {
 			c_sec := NewSecretClient(dexClient)
-			log.Infof("Starting Secret controller loop")
+			log.Infof("Starting controller loop for Secret")
 			sc := watchSecrets(client, c_sec)
 			go sc.Run(nil)
 		}

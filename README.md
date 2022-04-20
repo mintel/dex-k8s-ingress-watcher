@@ -8,7 +8,6 @@ It does this by running *in-cluster*, and monitoring for annotations on Ingress,
 
 The annotations on the resources define attributes of the `staticClient`, and modifications are made to Dex via gRPC.
 
-
 By default only the `Ingress` resources are watched - this is the most common pattern. Optionally `ConfigMap` and/or `Secret` resources can be monitored.
 
 The use of a `Secret` can also be useful since you can keep the `staticClient` `client-secret` truely secret, at least if you are using something like [SealedSecrets](https://github.com/bitnami-labs/sealed-secrets).

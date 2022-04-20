@@ -20,7 +20,7 @@ data:
       issuer: "Test"
       issuerUrl: "http://dex.kube-auth.svc.cluster.local"
       logoUrl: https://i.pinimg.com/originals/d3/97/8a/d3978a3830404998788e8c83dfa6f476.png
-    
+
     telemetry:
       http: 0.0.0.0:5558
 
@@ -39,6 +39,8 @@ data:
       redirectURIs:
       - http://dex-auth.kube-auth.svc.cluster.local/callback/test
       - http://auth.kube-auth.svc.cluster.local/callback/test
+
+    connectors: []
 
     enablePasswordDB: true
     staticPasswords:
